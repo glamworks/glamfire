@@ -14,3 +14,6 @@ coverage/
 .turbo/
 .pnpm-store/
 scratch/
+
+# orchestrator worker worktrees
+.claude/worktrees/
