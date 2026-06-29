@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-glm-json-001",
+  "object": "chat.completion",
+  "model": "accounts/fireworks/models/glm-5p2",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"answer\": 20, \"unit\": \"none\"}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 96,
+    "completion_tokens": 14,
+    "total_tokens": 110,
+    "prompt_tokens_details": { "cached_tokens": 0 }
+  }
+}

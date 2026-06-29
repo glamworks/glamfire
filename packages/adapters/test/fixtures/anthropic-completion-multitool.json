@@ -1,0 +1,29 @@
+{
+  "id": "msg_01Bc8dEf2hJk5m9p3qRsT6Uv",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-4-8",
+  "content": [
+    { "type": "text", "text": "Let me check both cities." },
+    {
+      "type": "tool_use",
+      "id": "toolu_01Aaa111bbb222ccc333ddd4",
+      "name": "get_weather",
+      "input": { "city": "Paris" }
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_01Eee555fff666ggg777hhh8",
+      "name": "get_weather",
+      "input": { "city": "London" }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 510,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 72
+  }
+}
