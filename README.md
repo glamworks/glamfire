@@ -126,6 +126,15 @@ every release.)
   provenance) with token‑budget packing, and a **tested export→import ownership
   invariant** (your store round‑trips to human‑readable JSONL and back, bit‑exact).
   Default embedder is offline/zero‑key; an on‑device transformer backend is opt‑in.
+- **`@glamfire/config`** — layered, typed, validated configuration (SPEC §6):
+  defaults → `~/.glam/config.toml` → `./glam.toml` → env → flags, with per‑value
+  provenance. **Secrets are references** (env/OS‑keychain), never inline, and **redacted**
+  in all output. `glam config` shows the resolved config; invalid config **fails loudly**
+  with an actionable message. Wired into `glam run`/`glam doctor` and the fireworks adapter.
+- **`@glamfire/skills`** — portable, model‑agnostic capability packs (SPEC §5.5): a
+  self‑contained skill directory (manifest + handlers + neutral instruction + example
+  episodes + optional verifier) loads, validates, and **installs into the engine** as
+  `{ system, tools }` for any model. Ships a working `code-explainer` example skill.
 - A passing **smoke test** that drives the real CLI the way a human would.
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 
@@ -140,7 +149,8 @@ every release.)
   faked.
 
 **Specified, in active build** (lock‑step, no shims — see [SPEC](SPEC.md))
-- router (center/edge) · skills · team harness · layered config · packaging.
+- router (center/edge) · team harness · SDK · packaging. (Edge/frontier escalation needs
+  a second adapter to land before the router's cascade is a real, asserted path.)
 
 If a capability is partial, the docs and this section say so. A feature is **DONE** only
 when a real human end‑user can use it.

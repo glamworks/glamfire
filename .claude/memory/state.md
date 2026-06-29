@@ -16,7 +16,13 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
   retrieval, **export→import invariant tested**. Offline hash embedder default; opt-in
   on-device transformer (fastembed). Demo: `node packages/brain/examples/demo.mjs`.
   Fully DONE (no remote dep).
-- `scripts/smoke.mjs` (drives real CLI + `glam run` no-key path); version source-of-truth.
+- **`@glamfire/config`** — layered TOML (defaults→~/.glam→./glam.toml→env→flags) +
+  provenance, zod-strict (fail-loud), secret refs (env/keychain) redacted. `glam config`
+  command; wired into run/doctor/fireworks adapter. Human-verified precedence + 0 leaks.
+- **`@glamfire/skills`** — self-contained skill dirs (skill.json manifest + .mjs handlers
+  + neutral template + episodes + verifier), loader + `installSkills → {system,tools}`,
+  example `code-explainer`. Composes onto engine contract; not yet wired to a CLI command.
+- `scripts/smoke.mjs` (drives real CLI + `glam run`/`glam config`); version source-of-truth.
 
 **Built, gates green, NOT yet DONE (live call pending key)**
 - `glam run` + `@glamfire/engine` (plan→act→observe loop, real tools, permission gate,
@@ -29,8 +35,16 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
   `RunState.system` + register `ToolSpec`s; budget ceilings live only on `Task.budget`.
 
 **Specified, not yet built** (lock-step, no shims): `@glamfire/router` (#5),
-`@glamfire/skills` (#6), `@glamfire/team` (#7), layered `@glamfire/config`, SDK, server
-mode, real binaries/packaging (#8), CI matrix.
+`@glamfire/team` (#7), SDK, server mode, real binaries/packaging (#8), CI matrix.
 
-**Next**: (1) get FIREWORKS_API_KEY → live-verify `glam run` → release 0.1.0. (2) Wave 2
-builders on the engine contract: router, skills, config, team Slack surface, packaging.
+**Router contract (from config) — Wave 3 must read these exact names**: config exposes
+`routing.default` (model id) + `routing.rules[]` (top-down, first match wins). Per-rule
+match: `distribution` ("center"|"edge"), `minConfidence`/`maxConfidence` [0,1], `requires`
+(capability tokens), `maxUsd` (projected ceiling). Per-rule result: `candidates` (ordered
+cheapest-first model ids). Capability tokens mirror engine `Capabilities`: `tool_calling`,
+`parallel_tool_calls`, `json_mode`, `vision`, `streaming`, `seed`, `long_context`. Router
+replaces the placeholder `route_decision` in engine `loop.ts`; emits `escalation` steps.
+Real cascade/escalation needs a 2nd adapter (anthropic/openai) — pair router with one.
+
+**Next**: (1) get FIREWORKS_API_KEY → live-verify `glam run` → release 0.1.0. (2) Wave 3:
+router + a 2nd adapter (anthropic) together; then team Slack surface, SDK, packaging.
