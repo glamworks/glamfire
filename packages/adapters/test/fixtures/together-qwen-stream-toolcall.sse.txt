@@ -1,0 +1,17 @@
+data: {"id":"tg-qwen-tc","object":"chat.completion.chunk","created":1719800000,"model":"Qwen/Qwen3-Coder-Next","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"tg-qwen-tc","object":"chat.completion.chunk","created":1719800000,"model":"Qwen/Qwen3-Coder-Next","choices":[{"index":0,"delta":{"content":"Computing with the calculator."},"finish_reason":null}]}
+
+data: {"id":"tg-qwen-tc","object":"chat.completion.chunk","created":1719800000,"model":"Qwen/Qwen3-Coder-Next","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_qwen_str1","type":"function","function":{"name":"calculator","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"tg-qwen-tc","object":"chat.completion.chunk","created":1719800000,"model":"Qwen/Qwen3-Coder-Next","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"expr"}}]},"finish_reason":null}]}
+
+data: {"id":"tg-qwen-tc","object":"chat.completion.chunk","created":1719800000,"model":"Qwen/Qwen3-Coder-Next","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ession\": \"(2 "}}]},"finish_reason":null}]}
+
+data: {"id":"tg-qwen-tc","object":"chat.completion.chunk","created":1719800000,"model":"Qwen/Qwen3-Coder-Next","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"+ 3) * 4\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"tg-qwen-tc","object":"chat.completion.chunk","created":1719800000,"model":"Qwen/Qwen3-Coder-Next","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: {"id":"tg-qwen-tc","object":"chat.completion.chunk","created":1719800000,"model":"Qwen/Qwen3-Coder-Next","choices":[],"usage":{"prompt_tokens":280,"completion_tokens":40,"prompt_tokens_details":{"cached_tokens":0},"total_tokens":320}}
+
+data: [DONE]

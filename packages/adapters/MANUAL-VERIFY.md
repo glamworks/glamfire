@@ -136,10 +136,125 @@ node packages/adapters/scripts/capture-anthropic-fixture.mjs
 #      -> calculator({"expression":"(2 + 3) * 4"})
 ```
 
-## 3. Conformance gate (both adapters, hermetic)
+## 3. Conformance gate (every adapter, hermetic)
 
 ```bash
 npx vitest run packages/adapters/test/conformance.test.ts
-# -> adapter conformance: fireworks-glm  (9 cases green)
-# -> adapter conformance: anthropic      (9 cases green)
+# -> adapter conformance: fireworks-glm                          (9 cases green)
+# -> adapter conformance: together (GLM-5.2 · FP4)               (9 cases green)
+# -> adapter conformance: together (Qwen3-Coder-Next · FP8)      (9 cases green)
+# -> adapter conformance: anthropic                              (9 cases green)
+```
+
+---
+
+# Manual verification — together adapter (live Together AI call)
+
+The `together` adapter speaks Together AI's OpenAI-compatible Chat Completions
+API (base `https://api.together.xyz/v1`, Bearer auth) and serves **two**
+open-weight models behind the shared `openai-compatible` core (research/23):
+
+| model id                  | quant | thinking | pricing in / cached / out (per 1M) |
+|---------------------------|-------|----------|------------------------------------|
+| `zai-org/GLM-5.2`         | FP4*  | yes      | $1.40 / $0.26 / $4.40              |
+| `Qwen/Qwen3-Coder-Next`   | FP8   | no       | $0.11 / $0.011** / $0.80           |
+
+> \* **Honesty caveat (research/23 §2):** Together serves GLM-5.2 at **FP4** — a
+> real quantization downgrade vs the Fireworks/Baseten **FP8** baseline. Prefer
+> Fireworks for GLM quality; use Together's GLM only as a cheaper/secondary host.
+>
+> \** **Honesty caveat (research/23 §1):** Together serves **Qwen3-Coder-Next via
+> a DEDICATED endpoint** (not turnkey serverless). The per-token list above uses
+> Qwen's reference serverless price; cache reads are modeled at ~0.1× input (the
+> common prefix-cache convention). Verify against the live dedicated-endpoint
+> invoice and, if the endpoint uses a deployment-specific model id, pass it
+> verbatim to `--model` / the capture script.
+
+This builder had **no `TOGETHER_API_KEY`**, so the two live calls below are
+**pending a key** — everything else is verified (build, typecheck, lint, the full
+unit/regression suite, the conformance battery against `together` for BOTH models
+incl. Qwen tool-call streaming fragment reassembly, smoke, and the offline
+`glam route` decision selecting Qwen-on-Together as the cheapest eligible
+candidate). No part of the call path is faked.
+
+## Prerequisites
+
+```bash
+export TOGETHER_API_KEY=...            # from https://api.together.xyz (enable ZDR in Settings)
+pnpm install && pnpm -r build          # build dist (the scripts import built JS)
+```
+
+## 1. Real streamed tool call through the adapter (human-standard verification)
+
+GLM-5.2 (thinking) and Qwen3-Coder-Next (non-thinking, coding agent), driven
+directly against the live API:
+
+```bash
+# GLM-5.2 on Together (sends reasoning_effort; expect interleaved reasoning):
+node --input-type=module -e '
+import { TOGETHER_GLM_MODEL, createTogetherAdapter, resolveTogetherConfig } from "./packages/adapters/dist/index.js";
+const cfg = resolveTogetherConfig(process.env, { model: TOGETHER_GLM_MODEL });
+const adapter = createTogetherAdapter(cfg);
+const state = {
+  system: "You are glamfire. Use the calculator tool for arithmetic.",
+  task: { goal: "compute", budget: {} },
+  messages: [{ role: "user", content: "What is (2 + 3) * 4? Use the calculator tool." }],
+  tools: [{ name: "calculator", description: "Evaluate an arithmetic expression.", permission: "read",
+    parameters: { type: "object", properties: { expression: { type: "string" } }, required: ["expression"] },
+    handler: async () => ({}) }],
+  config: { model: cfg.model, maxTokens: 1024 },
+};
+const result = await adapter.stream(state, (ev) => { if (ev.kind === "text") process.stdout.write(ev.delta); });
+console.log("\n-- quant:", adapter.quantization, JSON.stringify({ toolCalls: result.toolCalls, finishReason: result.finishReason, usage: result.usage }));
+console.log("cost USD:", adapter.pricing(result.usage));
+'
+
+# Qwen3-Coder-Next on Together (non-thinking; expect NO reasoning trace). Replace
+# the model id with your dedicated-endpoint id if Together requires one:
+node --input-type=module -e '
+import { TOGETHER_QWEN_MODEL, createTogetherAdapter, resolveTogetherConfig } from "./packages/adapters/dist/index.js";
+const cfg = resolveTogetherConfig(process.env, { model: TOGETHER_QWEN_MODEL });
+const adapter = createTogetherAdapter(cfg);
+const state = {
+  system: "You are glamfire. Use the calculator tool for arithmetic.",
+  task: { goal: "compute", budget: {} },
+  messages: [{ role: "user", content: "What is (2 + 3) * 4? Use the calculator tool." }],
+  tools: [{ name: "calculator", description: "Evaluate an arithmetic expression.", permission: "read",
+    parameters: { type: "object", properties: { expression: { type: "string" } }, required: ["expression"] },
+    handler: async () => ({}) }],
+  config: { model: cfg.model, maxTokens: 1024 },
+};
+const result = await adapter.stream(state, (ev) => { if (ev.kind === "text") process.stdout.write(ev.delta); });
+console.log("\n-- quant:", adapter.quantization, JSON.stringify({ toolCalls: result.toolCalls, finishReason: result.finishReason, usage: result.usage }));
+console.log("cost USD:", adapter.pricing(result.usage));
+'
+```
+
+Expect, for real: streamed text, then a reassembled
+`calculator({"expression":"(2 + 3) * 4"})` tool call (rebuilt from fragmented
+`tool_calls[].function.arguments` deltas), `finishReason: "tool_calls"`, a real
+`usage` object, and a non-zero cost from the per-model price table. GLM emits a
+reasoning trace; Qwen3-Coder-Next does not.
+
+## 2. Refresh the wire-format fixtures from a live response
+
+```bash
+node packages/adapters/scripts/capture-together-fixture.mjs glm
+node packages/adapters/scripts/capture-together-fixture.mjs qwen
+# -> model: <id>  quant: FP4|FP8
+# -> wrote N bytes of raw SSE to .../fixtures/together-<model>-stream-live.sse.txt
+# -> parsed: 1 tool call(s), … finish=tool_calls, usage in=… out=…
+#      -> calculator({"expression":"(2 + 3) * 4"})
+```
+
+## 3. Routing selects Qwen-on-Together as the cheap coding tier (offline, no key)
+
+```bash
+# In a project whose glam.toml lists providers.together.models =
+# ["zai-org/GLM-5.2", "Qwen/Qwen3-Coder-Next"] and a rule with
+# requires = ["tool_calling", "long_context"], candidates ordered Qwen-first:
+node packages/cli/src/index.mjs route "Refactor this module and add unit tests using the calculator tool"
+# -> chosen model: Qwen/Qwen3-Coder-Next  projected: $0.0005  frontier baseline: $0.0029
+# -> why: rule #0 matched; chose cheapest of 2 eligible candidate(s): Qwen/Qwen3-Coder-Next
+# -> cascade: Qwen/Qwen3-Coder-Next -> accounts/fireworks/models/glm-5p2
 ```

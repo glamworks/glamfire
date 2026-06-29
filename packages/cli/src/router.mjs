@@ -6,8 +6,10 @@
 import {
   createAnthropicAdapter,
   createFireworksGlmAdapter,
+  createTogetherAdapter,
   resolveAnthropicConfig,
   resolveFireworksConfig,
+  resolveTogetherConfig,
 } from '@glamfire/adapters';
 import { ModelRegistry, Router, descriptorFromAdapter } from '@glamfire/router';
 
@@ -46,6 +48,31 @@ export function buildModelRegistry(glamConfig, env, { allowDryRunKey = false } =
     };
     if (fwConfig.maxTokens !== undefined) runtimeConfig.maxTokens = fwConfig.maxTokens;
     if (fwConfig.seed !== undefined) runtimeConfig.seed = fwConfig.seed;
+    registry.add(descriptorFromAdapter(adapter, runtimeConfig));
+  }
+
+  // Together AI — second OpenAI-compatible provider (research/23): serves GLM-5.2
+  // (FP4) and Qwen3-Coder-Next (FP8) behind the shared core. Only models the team
+  // explicitly lists under `providers.together.models` are registered; with the
+  // default (empty) list nothing is wired, so the router never pretends a Together
+  // path exists that the config didn't ask for. Each registered model carries its
+  // own real capabilities + per-model pricing (and served quantization).
+  const togetherModels = new Set(glamConfig.providers.together.models);
+  for (const modelId of togetherModels) {
+    const overrides = { model: modelId };
+    if (allowDryRunKey && !env.TOGETHER_API_KEY) {
+      overrides.apiKey = 'dry-run-no-provider-call';
+    }
+    const togetherConfig = resolveTogetherConfig(env, overrides, { config: glamConfig });
+    const adapter = createTogetherAdapter(togetherConfig);
+    const runtimeConfig = { model: modelId, temperature: togetherConfig.temperature };
+    // reasoning_effort only matters for the thinking model (GLM); the adapter
+    // ignores it for the non-thinking Qwen3-Coder-Next.
+    if (adapter.modelInfo.thinking && togetherConfig.reasoningEffort !== undefined) {
+      runtimeConfig.reasoningEffort = togetherConfig.reasoningEffort;
+    }
+    if (togetherConfig.maxTokens !== undefined) runtimeConfig.maxTokens = togetherConfig.maxTokens;
+    if (togetherConfig.seed !== undefined) runtimeConfig.seed = togetherConfig.seed;
     registry.add(descriptorFromAdapter(adapter, runtimeConfig));
   }
 

@@ -76,14 +76,19 @@ function assertDecode(actual: ModelTurnResult, expected: DecodeExpectation): voi
 }
 
 /**
- * Run the full conformance battery for one adapter. Call once per adapter; the
- * suite name is the adapter id under test.
+ * Run the full conformance battery for one adapter. Call once per
+ * `{adapter, model}` under test; the suite name is the adapter id, optionally
+ * suffixed with `label` to disambiguate multiple models on the same adapter
+ * (e.g. the `together` adapter running both GLM-5.2 and Qwen3-Coder-Next).
  */
-export function runConformance(makeCase: () => ConformanceCase): void {
+export function runConformance(makeCase: () => ConformanceCase, label?: string): void {
   const c = makeCase();
   const { adapter } = c;
+  const suite = label
+    ? `adapter conformance: ${adapter.id} (${label})`
+    : `adapter conformance: ${adapter.id}`;
 
-  describe(`adapter conformance: ${adapter.id}`, () => {
+  describe(suite, () => {
     it('declares a complete, sane capability surface', () => {
       const caps = adapter.capabilities;
       expect(adapter.id).toBeTruthy();

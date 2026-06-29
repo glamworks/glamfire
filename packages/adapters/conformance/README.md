@@ -3,10 +3,13 @@
 > **A model/adapter is "supported" only when this suite is green.**
 
 This is the single, provider-agnostic battery that turns a model into a *working
-agent*. The same cases run against **every** adapter (`fireworks-glm`,
-`anthropic`, …). It is the gate the harness exists to defend: a new adapter is
-not "done" — and a model is not "supported" — until `runConformance` passes for
-it.
+agent*. The same cases run against **every** adapter and **every** model on it:
+`fireworks-glm` (GLM-5.2), `together` (GLM-5.2 at FP4 **and** Qwen3-Coder-Next at
+FP8 on Together AI), `anthropic` (Claude), … It is the gate the harness exists to
+defend: a new adapter/model is not "done" — and a model is not "supported" —
+until `runConformance` passes for it. Pass an optional `label` to disambiguate
+multiple models on one adapter (e.g. `runConformance(makeCase, 'Qwen3-Coder-Next
+· FP8')`).
 
 ## What the battery checks
 
