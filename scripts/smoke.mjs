@@ -127,22 +127,31 @@ check('glam config resolves layered precedence with provenance and redacts secre
       join(home, '.glam', 'config.toml'),
       'model = "user-model"\n[run]\neffort = "max"\n',
     );
-    writeFileSync(join(projRoot, 'glam.toml'), 'model = "project-model"\n[run]\ntemperature = 0.7\n');
-    const env = baseEnv(home, { GLAM_MODEL: 'env-model', FIREWORKS_API_KEY: 'sk-smoke-SECRET-123' });
+    writeFileSync(
+      join(projRoot, 'glam.toml'),
+      'model = "project-model"\n[run]\ntemperature = 0.7\n',
+    );
+    const env = baseEnv(home, {
+      GLAM_MODEL: 'env-model',
+      FIREWORKS_API_KEY: 'sk-smoke-SECRET-123',
+    });
     const out = execFileSync('node', [cli, 'config'], { encoding: 'utf8', cwd, env });
 
     // Precedence: env (model) > project (temperature) > user (effort) > defaults.
     if (!/\bmodel\s+=\s+env-model\s+\[env\]/.test(out)) {
       throw new Error(`model precedence (env) not shown in:\n${out}`);
     }
-    if (!/\brun\.effort\s+=\s+max\s+\[user\]/.test(out)) throw new Error('run.effort (user) not shown');
+    if (!/\brun\.effort\s+=\s+max\s+\[user\]/.test(out))
+      throw new Error('run.effort (user) not shown');
     if (!/\brun\.temperature\s+=\s+0\.7\s+\[project\]/.test(out)) {
       throw new Error('run.temperature (project) not shown');
     }
     // Upward project-config discovery from a nested cwd.
-    if (!out.includes(join(projRoot, 'glam.toml'))) throw new Error('project config path not reported');
+    if (!out.includes(join(projRoot, 'glam.toml')))
+      throw new Error('project config path not reported');
     // Redaction: the secret VALUE must never appear; presence is shown as "set".
-    if (out.includes('sk-smoke-SECRET-123')) throw new Error('SECRET LEAKED into `glam config` output');
+    if (out.includes('sk-smoke-SECRET-123'))
+      throw new Error('SECRET LEAKED into `glam config` output');
     if (!/fireworks\s+env:FIREWORKS_API_KEY\s+.*set/.test(out)) {
       throw new Error('fireworks credential not reported as set');
     }
@@ -152,7 +161,11 @@ check('glam config resolves layered precedence with provenance and redacts secre
 check('glam config --json emits valid JSON with secrets redacted', () => {
   withConfigFixture(({ home }) => {
     const env = baseEnv(home, { FIREWORKS_API_KEY: 'sk-json-SECRET-456' });
-    const out = execFileSync('node', [cli, 'config', '--json'], { encoding: 'utf8', cwd: home, env });
+    const out = execFileSync('node', [cli, 'config', '--json'], {
+      encoding: 'utf8',
+      cwd: home,
+      env,
+    });
     if (out.includes('sk-json-SECRET-456')) throw new Error('SECRET LEAKED into --json output');
     const parsed = JSON.parse(out);
     if (parsed.config.model !== 'accounts/fireworks/models/glm-5p2') {

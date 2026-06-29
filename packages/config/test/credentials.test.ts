@@ -46,9 +46,9 @@ describe('resolveCredential', () => {
 describe('describeCredentialRef — safe source labels', () => {
   it('describes env and keychain references without revealing anything', () => {
     expect(describeCredentialRef({ env: 'FIREWORKS_API_KEY' })).toBe('env:FIREWORKS_API_KEY');
-    expect(
-      describeCredentialRef({ keychain: { service: 'glamfire', account: 'anthropic' } }),
-    ).toBe('keychain:glamfire/anthropic');
+    expect(describeCredentialRef({ keychain: { service: 'glamfire', account: 'anthropic' } })).toBe(
+      'keychain:glamfire/anthropic',
+    );
     expect(describeCredentialRef(undefined)).toBe('none');
   });
 });

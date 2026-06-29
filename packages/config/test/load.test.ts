@@ -163,7 +163,11 @@ describe('actionable failures (never a silent fallback)', () => {
 describe('display view (glam config) — redaction-safe', () => {
   it('flattens leaves with provenance and never includes a secret value', () => {
     writeProject('[providers.fireworks]\ncredential = { env = "FIREWORKS_API_KEY" }\n');
-    const loaded = loadConfig({ cwd: project, home, env: { FIREWORKS_API_KEY: 'sk-super-secret-xyz' } });
+    const loaded = loadConfig({
+      cwd: project,
+      home,
+      env: { FIREWORKS_API_KEY: 'sk-super-secret-xyz' },
+    });
     const view = describeConfig(loaded, { FIREWORKS_API_KEY: 'sk-super-secret-xyz' });
 
     // The secret value never appears anywhere in the display payload.
