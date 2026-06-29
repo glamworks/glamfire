@@ -1,0 +1,25 @@
+name: Feature / mini-feature
+description: A real, full-stack capability to add (no shims).
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can't a real user do today?
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: Proposed full-stack mini-feature
+      description: The thin-but-complete vertical slice — surface to provider. Which SPEC section?
+    validations:
+      required: true
+  - type: textarea
+    id: verify
+    attributes:
+      label: How we'd verify it (human standard)
+      description: How would a real human confirm this is DONE?
+    validations:
+      required: true

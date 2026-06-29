@@ -1,0 +1,8 @@
+{
+  "name": "@glamfire/engine",
+  "version": "0.0.1",
+  "private": true,
+  "description": "The open engine — the agent loop: plan to act to observe, tool dispatch, permissions, sandboxing, streaming (SPEC 5.1).",
+  "license": "Apache-2.0",
+  "type": "module"
+}

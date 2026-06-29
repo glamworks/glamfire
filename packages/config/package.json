@@ -1,0 +1,8 @@
+{
+  "name": "@glamfire/config",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Layered, zod-validated configuration: providers, routing policy, permissions (SPEC 6).",
+  "license": "Apache-2.0",
+  "type": "module"
+}

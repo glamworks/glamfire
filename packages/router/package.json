@@ -1,0 +1,8 @@
+{
+  "name": "@glamfire/router",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Center/edge cost-aware routing with confidence-based escalation; GLM 5.2/Fireworks default workhorse (SPEC 5.3).",
+  "license": "Apache-2.0",
+  "type": "module"
+}
