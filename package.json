@@ -1,0 +1,43 @@
+{
+  "name": "glamfire",
+  "version": "0.0.1",
+  "private": true,
+  "description": "The open harness for the last mile of AI. Own your context. Route your intelligence. Never rent your brain back.",
+  "license": "Apache-2.0",
+  "homepage": "https://glamworks.github.io",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glamworks/glamfire.git"
+  },
+  "bugs": "https://github.com/glamworks/glamfire/issues",
+  "type": "module",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "glam": "node packages/cli/src/index.mjs",
+    "version:print": "node scripts/version.mjs",
+    "version:bump": "node scripts/bump-version.mjs",
+    "test": "node --test packages/**/test/*.test.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "lint": "biome check .",
+    "format": "biome format --write ."
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "harness",
+    "llm",
+    "router",
+    "glm",
+    "fireworks",
+    "context",
+    "open-source",
+    "model-agnostic",
+    "last-mile"
+  ]
+}
