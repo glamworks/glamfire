@@ -30,6 +30,22 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
 - **`anthropic` adapter** (Claude Messages API) + **adapter conformance suite** (same battery vs
   fireworks-glm + anthropic; "supported" = green). Registered in router registry
   (`packages/cli/src/router.mjs`). Live Claude call pending ANTHROPIC_API_KEY.
+- **`together` adapter + Qwen3-Coder** — shared OpenAI-compatible core (`openai-compatible.ts`);
+  fireworks-glm refactored onto it (public API unchanged). Serves GLM-5.2 (FP4) + Qwen3-Coder-Next
+  (FP8). Conformance runs vs all 4 model-configs. Registered in router registry. Live pending
+  TOGETHER_API_KEY. CAVEAT: Together GLM=FP4 (prefer Fireworks FP8); Qwen=dedicated endpoint.
+- **Packaging (#8)** — npm pkg name **`glamfire`** (available; provides `glam` bin; self-contained
+  bundle, no native deps, version inlined via Bun build plugin), 5-OS binaries (bun --compile,
+  checksummed+sigstore), brew/scoop/winget manifests, CycloneDX SBOM, `.github/workflows/{ci,release}.yml`.
+  Build: `bun scripts/build-npm.mjs --pack`, `build-binaries.mjs`, `verify-artifacts.mjs`.
+  PUBLISH GATED on user secrets: NPM_TOKEN, HOMEBREW_TAP_DEPLOY_KEY, SCOOP_BUCKET_DEPLOY_KEY,
+  WINGET_TOKEN + repos glamworks/homebrew-tap + glamworks/scoop-bucket must exist.
+  KNOWN: `glam doctor` install-check shows ✗ inside compiled binary (cosmetic; npm pkg ok).
+- **Memecoin (prepare-only, NOT LIVE)** — `marketing/meme-coin/`: real guarded devnet mint.mjs
+  (Solana deps isolated, NOT in workspace), two-layer mainnet guard (irreversibility flag +
+  interactive typed confirm), guard test, finalized spec/runbook/disclaimer. STATUS marker
+  `token-status: NOT_LIVE`. Launch needs user: funded keypair, hosted metadata, treasury multisig,
+  explicit authorization. NEVER advertise/launch unilaterally.
 - `scripts/smoke.mjs` (drives real CLI + `glam run`/`glam config`/`glam route`); version source.
 
 **Built, gates green, NOT yet DONE (live call pending key)**

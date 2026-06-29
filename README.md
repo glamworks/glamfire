@@ -202,20 +202,27 @@ every release.)
   GLM 5.2 round‑trip is pending a `FIREWORKS_API_KEY`** for human‑standard verification —
   we do not mark it DONE until a real Fireworks call is observed. No part of the path is
   faked.
-- **`anthropic` adapter** (Claude, native Messages API: system shaping, `tool_use`/
-  `tool_result` blocks, SSE `input_json_delta` fragment reassembly, cache‑aware pricing) —
-  the edge/escalation candidate, registered into the router's model registry. Plus a
-  shared **adapter conformance suite** (the same battery runs against `fireworks-glm` **and**
-  `anthropic`; a model is "supported" only when it's green). Verified against real captured
-  Anthropic + Fireworks wire fixtures; the **live Claude call is pending an `ANTHROPIC_API_KEY`**.
+- **Four tested adapters** behind one conformance suite: **`fireworks-glm`** (GLM 5.2/FP8,
+  the default), **`anthropic`** (Claude Messages API — edge/escalation candidate), and
+  **`together`** serving **GLM 5.2** *and* **Qwen3‑Coder‑Next** — all built on a shared
+  OpenAI‑compatible core (system shaping, native tool calling, SSE tool‑call fragment
+  reassembly, per‑model pricing/capabilities). The same **conformance battery** runs against
+  every adapter/model (a model is "supported" only when it's green). Honesty caveat: Together
+  serves GLM‑5.2 at **FP4** (a real downgrade vs Fireworks **FP8**) and Qwen3‑Coder‑Next via a
+  *dedicated* endpoint — see [`research/23`](research/23-second-model-and-provider.md). Verified
+  against real captured wire fixtures; **live calls pending each provider's key**
+  (`FIREWORKS_API_KEY` / `ANTHROPIC_API_KEY` / `TOGETHER_API_KEY`). The router's cross‑provider
+  escalation (cheap GLM/Qwen → frontier Claude) is real, wired, and cost‑compared today.
+- **Cross‑platform install without cloning** (SPEC §7): a self‑contained **`glamfire`** npm
+  package (`npm i -g glamfire` → `glam`), single‑file **binaries** for macOS/Windows/Linux
+  (arm64+x64, checksummed, sigstore‑signed), and **Homebrew / Scoop / winget** manifests, all
+  produced by a tag‑driven **release workflow** + an SBOM. Built and exercised (the packed npm
+  install and the compiled binary both run real commands); **actual publishing is gated on
+  maintainer secrets** (`NPM_TOKEN`, tap/bucket deploy keys) — see *Install* below.
 
 **Specified, in active build** (lock‑step, no shims — see [SPEC](SPEC.md))
-- second provider **Together AI** + **Qwen3‑Coder** (generalizing the OpenAI‑compatible
-  adapter; note: Together serves GLM‑5.2 at **FP4** vs Fireworks **FP8**, and Qwen3‑Coder‑Next
-  needs a *dedicated* endpoint — see [`research/23`](research/23-second-model-and-provider.md))
-  · Docker image for the team/server profiles · team harness · SDK. The router's
-  **cross‑provider** escalation (cheap GLM → frontier Claude) is real, wired, and asserted
-  in‑process today; the *live* cheap→frontier cascade awaits provider keys only.
+- Docker image for the team/server profiles · team harness · SDK. The *live* cheap→frontier
+  cascade across providers awaits provider keys only.
 
 If a capability is partial, the docs and this section say so. A feature is **DONE** only
 when a real human end‑user can use it.
