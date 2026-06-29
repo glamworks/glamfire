@@ -4,10 +4,17 @@
 
 export * from './types.js';
 export {
+  type CommandPolicy,
   ToolRegistry,
   ToolError,
   readFileTool,
   calculatorTool,
+  writeFileTool,
+  editFileTool,
+  runCommandTool,
+  createRunCommandTool,
+  defaultCommandPolicy,
+  DEFAULT_COMMAND_ALLOWLIST,
   builtinTools,
 } from './tools.js';
 export {

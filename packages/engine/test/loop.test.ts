@@ -3,6 +3,9 @@
 // is the REAL engine: the real tool registry, the real calculator tool, the
 // real permission gate, and the real budget ceiling.
 
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   type ModelTurnResult,
   type RunState,
@@ -15,7 +18,7 @@ import {
   defaultPolicy,
   runTask,
 } from '@glamfire/engine';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 function turn(partial: Partial<ModelTurnResult>): ModelTurnResult {
   return {
@@ -243,5 +246,152 @@ describe('plan -> act -> observe loop', () => {
     const result = run.steps.find((s) => s.type === 'tool_result');
     expect(result?.type === 'tool_result' && result.ok).toBe(false);
     expect(result?.type === 'tool_result' && String(result.result)).toMatch(/unknown tool/);
+  });
+});
+
+// The dogfooding M1 cycle (research/22): read a file, propose an edit, run a
+// command, iterate — all through the REAL engine, gate, and tools. The model is
+// the only scripted piece. No provider call, no key needed.
+describe('dogfood edit -> run loop (M1, key-independent)', () => {
+  let dir: string;
+  // A seeded bug: subtraction where addition is intended.
+  const buggy = 'module.exports = (a, b) => a - b;\n';
+  const fixed = 'module.exports = (a, b) => a + b;\n';
+  // A real test command: requires the edited module and asserts 2 + 3 === 5.
+  const checkScript =
+    "const add = require('./add.js'); if (add(2, 3) !== 5) { process.exit(1); } process.stdout.write('PASS');";
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'glamfire-m1-'));
+    writeFileSync(join(dir, 'add.js'), buggy, 'utf8');
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('denies the edit and the command by default (least privilege), leaving the file untouched', async () => {
+    const adapter = scriptedAdapter([
+      turn({
+        toolCalls: [{ id: 'r1', name: 'read_file', arguments: { path: 'add.js' } }],
+        finishReason: 'tool_calls',
+      }),
+      turn({
+        toolCalls: [
+          {
+            id: 'e1',
+            name: 'edit_file',
+            arguments: { path: 'add.js', old_string: 'a - b', new_string: 'a + b' },
+          },
+        ],
+        finishReason: 'tool_calls',
+      }),
+      turn({
+        toolCalls: [
+          {
+            id: 'x1',
+            name: 'run_command',
+            arguments: { command: 'node', args: ['-e', checkScript] },
+          },
+        ],
+        finishReason: 'tool_calls',
+      }),
+      turn({ text: 'I was not permitted to edit or run.', finishReason: 'stop' }),
+    ]);
+
+    const run = await runTask({
+      // No asker, no exec override: defaults stay least-privilege.
+      task: { goal: 'fix the add bug', budget: { maxSteps: 8 } },
+      adapter,
+      tools: builtinTools(),
+      config: baseConfig,
+      cwd: dir,
+    });
+
+    const results = run.steps.filter((s) => s.type === 'tool_result');
+    const editResult = results.find((s) => s.type === 'tool_result' && s.name === 'edit_file');
+    const execResult = results.find((s) => s.type === 'tool_result' && s.name === 'run_command');
+    // The edit was an `ask` (write) with no asker -> denied.
+    expect(editResult?.type === 'tool_result' && editResult.ok).toBe(false);
+    expect(editResult?.type === 'tool_result' && String(editResult.result)).toMatch(/denied/);
+    // The command was `exec` -> denied by policy outright.
+    expect(execResult?.type === 'tool_result' && execResult.ok).toBe(false);
+    expect(execResult?.type === 'tool_result' && String(execResult.result)).toMatch(
+      /denied by policy/,
+    );
+    // The real file on disk is unchanged.
+    expect(readFileSync(join(dir, 'add.js'), 'utf8')).toBe(buggy);
+  });
+
+  it('closes the read -> edit -> run cycle with approval, iterating to green for real', async () => {
+    const adapter = scriptedAdapter([
+      // 1. Read the buggy file.
+      turn({
+        toolCalls: [{ id: 'r1', name: 'read_file', arguments: { path: 'add.js' } }],
+        finishReason: 'tool_calls',
+      }),
+      // 2. Run the test first; it fails (exit 1) — the model observes red.
+      turn({
+        toolCalls: [
+          {
+            id: 'x1',
+            name: 'run_command',
+            arguments: { command: 'node', args: ['-e', checkScript] },
+          },
+        ],
+        finishReason: 'tool_calls',
+      }),
+      // 3. Apply the fix.
+      turn({
+        toolCalls: [
+          {
+            id: 'e1',
+            name: 'edit_file',
+            arguments: { path: 'add.js', old_string: 'a - b', new_string: 'a + b' },
+          },
+        ],
+        finishReason: 'tool_calls',
+      }),
+      // 4. Re-run the test; now it passes.
+      turn({
+        toolCalls: [
+          {
+            id: 'x2',
+            name: 'run_command',
+            arguments: { command: 'node', args: ['-e', checkScript] },
+          },
+        ],
+        finishReason: 'tool_calls',
+      }),
+      turn({ text: 'Fixed: add(2,3) now returns 5. Tests green.', finishReason: 'stop' }),
+    ]);
+
+    const run = await runTask({
+      task: { goal: 'fix the add bug and prove the test passes', budget: { maxSteps: 10 } },
+      adapter,
+      tools: builtinTools(),
+      config: baseConfig,
+      cwd: dir,
+      // A human approves writes; exec is explicitly enabled for run_command only.
+      policy: defaultPolicy({ asker: () => true, toolOverrides: { run_command: 'ask' } }),
+    });
+
+    expect(run.status).toBe('done');
+    // The edit really happened on disk.
+    expect(readFileSync(join(dir, 'add.js'), 'utf8')).toBe(fixed);
+
+    const execResults = run.steps.filter(
+      (s) => s.type === 'tool_result' && s.name === 'run_command',
+    );
+    expect(execResults).toHaveLength(2);
+    // First run (before the fix) exits non-zero...
+    const first = execResults[0];
+    expect(first?.type === 'tool_result' && (first.result as { exitCode: number }).exitCode).toBe(
+      1,
+    );
+    // ...the second run (after the fix) exits zero and prints PASS — iterated to green.
+    const second = execResults[1];
+    if (second?.type === 'tool_result') {
+      const r = second.result as { exitCode: number; stdout: string };
+      expect(r.exitCode).toBe(0);
+      expect(r.stdout).toBe('PASS');
+    }
   });
 });

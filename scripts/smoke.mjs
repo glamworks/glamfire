@@ -69,6 +69,9 @@ check('glam run --help shows the run usage', () => {
   if (!out.includes('glam run')) throw new Error('missing run usage header');
   if (!out.includes('--effort')) throw new Error('missing --effort option');
   if (!out.includes('FIREWORKS_API_KEY')) throw new Error('missing key requirement note');
+  // Dogfood edit->run loop: run_command is opt-in and least-privilege (issue M1).
+  if (!out.includes('--allow-exec')) throw new Error('missing --allow-exec option');
+  if (!out.includes('run_command')) throw new Error('run help should describe run_command');
 });
 
 check('glam run without a prompt exits 2', () => {
