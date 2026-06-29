@@ -27,6 +27,9 @@
     "test:watch": "vitest",
     "presmoke": "pnpm run build",
     "smoke": "node scripts/smoke.mjs",
+    "build:npm": "bun scripts/build-npm.mjs",
+    "build:binaries": "bun scripts/build-binaries.mjs",
+    "sbom": "bun scripts/build-sbom.mjs",
     "lint": "biome check .",
     "format": "biome format --write ."
   },
