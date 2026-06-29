@@ -1,0 +1,38 @@
+{
+  "name": "code-explainer",
+  "version": "1.0.0",
+  "description": "Explain unfamiliar source code: outline its symbols, then describe each one's purpose, inputs/outputs, and risks.",
+  "module": "./skill.mjs",
+  "instructionPath": "./template.md",
+  "tools": [
+    {
+      "name": "outline_code",
+      "description": "Outline the top-level symbols (functions, classes, exported declarations) of a piece of source code. Returns a structural map: each symbol's kind, name, line, and whether it is exported, plus a line count.",
+      "permission": "read",
+      "handler": "outlineCode",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The source code to outline."
+          },
+          "language": {
+            "type": "string",
+            "description": "Optional language label, e.g. 'typescript'."
+          }
+        },
+        "required": ["code"],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "episodes": [
+    {
+      "goal": "Explain this function:\nexport function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }",
+      "response": "Summary: `clamp` constrains a number to an inclusive range.\n- clamp(n, lo, hi): returns n limited to [lo, hi]. Inputs: a number n and the bounds lo/hi. Output: lo if n<lo, hi if n>hi, else n. Pure, no side effects; assumes lo <= hi (otherwise the result is pinned to hi).",
+      "note": "Note the Summary line and per-symbol input/output coverage."
+    }
+  ],
+  "verifier": "verifyExplanation"
+}
