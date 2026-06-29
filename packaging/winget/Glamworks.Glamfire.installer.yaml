@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: Glamworks.Glamfire
+PackageVersion: __VERSION__
+InstallerType: portable
+Commands:
+  - glam
+ReleaseDate: __RELEASE_DATE__
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/glamworks/glamfire/releases/download/v__VERSION__/glam-windows-x64.exe
+    InstallerSha256: __SHA256_glam-windows-x64.exe__
+ManifestType: installer
+ManifestVersion: 1.6.0

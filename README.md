@@ -97,17 +97,47 @@ glamfire routes to. Everything else escalates only when it has to.
 > shipping surface; see **[Current reality](#current-reality)** for exactly what runs
 > today versus what is specified and in progress. We do not market vaporware.
 
+The install paths below are **built and tested** — the `glam` CLI bundles to a
+self‑contained npm package (no `workspace:*` deps, no native modules) and to single‑file
+binaries for all five OS/arch targets via `bun build --compile`. The **publish** to the
+registries is **wired in CI but gated on maintainer secrets** (see the note after the
+commands), so the package‑manager one‑liners go live the moment those secrets are added.
+
 ```bash
-# Today (foundation): run the CLI from source
-git clone https://github.com/glamworks/glamfire.git
-cd glamfire
-node packages/cli/src/index.mjs --version
-node packages/cli/src/index.mjs doctor
+# npm (any Node >= 22 user) — provides the `glam` command
+npm install -g glamfire
+
+# macOS / Linux — Homebrew tap
+brew install glamworks/tap/glamfire
+
+# Windows — Scoop
+scoop bucket add glamworks https://github.com/glamworks/scoop-bucket
+scoop install glamfire
+
+# Windows — winget
+winget install Glamworks.Glamfire
+
+# Any OS — download the single-file binary for your platform from the GitHub Release
+#   glam-darwin-arm64 · glam-darwin-x64 · glam-linux-x64 · glam-linux-arm64 · glam-windows-x64.exe
+# then:  chmod +x glam-* && ./glam-<your-target> --version
 ```
 
-Planned install paths (per [SPEC §7](SPEC.md#7-cross-platform--distribution)):
-single‑file `glam` binaries for **macOS, Windows, Linux**, an npm package, a Homebrew
-tap, Scoop/winget, and a Docker image for the team/server profiles.
+```bash
+# Or run the CLI straight from source (no packaging needed)
+git clone https://github.com/glamworks/glamfire.git
+cd glamfire && pnpm install && pnpm -r build
+node packages/cli/src/index.mjs --version
+```
+
+> **What's wired vs. awaiting secrets.** Building the artifacts, checksums, the SBOM,
+> sigstore signing, and the GitHub Release all run unconditionally on a `v*` tag. The
+> **publishes are gated** so nothing ships until the maintainer adds the credential:
+> `NPM_TOKEN` (npm), `HOMEBREW_TAP_DEPLOY_KEY` (tap repo `glamworks/homebrew-tap`),
+> `SCOOP_BUCKET_DEPLOY_KEY` (bucket repo `glamworks/scoop-bucket`), `WINGET_TOKEN`
+> (winget‑pkgs PR). Until then the `npm i -g glamfire` / `brew` / `scoop` / `winget`
+> lines resolve once the first release is published. Build the artifacts yourself any
+> time: `bun scripts/build-npm.mjs --pack` and `bun scripts/build-binaries.mjs`. A
+> Docker image for the team/server profiles is still specified, not yet built.
 
 ---
 
@@ -147,6 +177,19 @@ every release.)
   loop**. `glam route "<prompt>"` prints the decision + a **distribution report** ($ saved
   vs always‑frontier) with **no API key and no provider call**; `glam run --explain` shows
   the live decision. Wired into the engine via a neutral `RouterHook`.
+- **Cross‑platform installability without cloning** (SPEC §7), **built and verified
+  end‑to‑end**: the `glam` CLI bundles to a self‑contained **`glamfire` npm package**
+  (one file, no `workspace:*` deps, no native modules — `npm i -g` then run the
+  installed binary, proven by packing the tarball, global‑installing it, and running
+  `glam --version` + `glam route`), and to **single‑file binaries** for darwin‑arm64,
+  darwin‑x64, linux‑x64, linux‑arm64, and windows‑x64 via `bun build --compile` (the
+  host binary is compiled and actually run in the build + in CI). Ships **Homebrew /
+  Scoop / winget** manifest templates (filled with version + SHA‑256 by
+  `scripts/render-manifests.mjs`), a **CycloneDX SBOM**, and a `v*`‑tag **release
+  workflow** that checksums, sigstore‑signs, and publishes — with every registry
+  publish **gated on a maintainer secret** (no‑op until added). CI runs the full gates
+  (build/typecheck/lint/test/smoke) on **macOS, Windows, Linux** and builds+runs the
+  artifacts on macOS+Linux.
 - A passing **smoke test** that drives the real CLI the way a human would.
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 
@@ -170,7 +213,7 @@ every release.)
 - second provider **Together AI** + **Qwen3‑Coder** (generalizing the OpenAI‑compatible
   adapter; note: Together serves GLM‑5.2 at **FP4** vs Fireworks **FP8**, and Qwen3‑Coder‑Next
   needs a *dedicated* endpoint — see [`research/23`](research/23-second-model-and-provider.md))
-  · cross‑platform install (npm + Homebrew + Scoop/winget) · team harness · SDK. The router's
+  · Docker image for the team/server profiles · team harness · SDK. The router's
   **cross‑provider** escalation (cheap GLM → frontier Claude) is real, wired, and asserted
   in‑process today; the *live* cheap→frontier cascade awaits provider keys only.
 

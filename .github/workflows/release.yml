@@ -1,0 +1,202 @@
+name: release
+
+# Cut a release from a `v*` tag: build the cross-platform single-file binaries and
+# the self-contained `glamfire` npm package, checksum + sign + SBOM them, publish a
+# GitHub Release with every artifact attached, then publish to the package managers.
+#
+# The PUBLISH steps (npm, Homebrew tap, Scoop bucket, winget) are each gated on a
+# repository secret, so this workflow runs green and no-ops the publishes until the
+# maintainer adds credentials ("I prep, they hold keys"). Building, checksums, the
+# SBOM, sigstore signing, and the GitHub Release all run unconditionally.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re)build, e.g. v0.1.0'
+        required: true
+
+permissions:
+  contents: write # create the GitHub Release
+  id-token: write # npm provenance + cosign keyless signing (OIDC)
+
+jobs:
+  # --- build the standalone binaries (matrix: darwin on macOS, the rest on linux) ---
+  binaries:
+    name: binaries (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            targets: darwin-arm64,darwin-x64
+          - os: ubuntu-latest
+            targets: linux-x64,linux-arm64,windows-x64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.9'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '9.12.0'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: build workspace dist
+        run: pnpm -r build
+      - name: compile binaries
+        run: bun scripts/build-binaries.mjs --targets=${{ matrix.targets }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.os }}
+          path: dist-bin/glam-*
+          if-no-files-found: error
+
+  # --- build the self-contained npm package tarball ---
+  npm-pack:
+    name: npm package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.9'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '9.12.0'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r build
+      - name: build + pack glamfire
+        run: bun scripts/build-npm.mjs --pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-staged
+          path: |
+            dist/npm/**
+            glamfire-*.tgz
+          if-no-files-found: error
+
+  # --- assemble the release: checksums, SBOM, signing, GitHub Release, publishes ---
+  release:
+    name: release
+    needs: [binaries, npm-pack]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: stage release assets
+        run: |
+          set -euo pipefail
+          mkdir -p dist-bin dist/npm
+          cp artifacts/binaries-*/glam-* dist-bin/
+          cp -r artifacts/npm-staged/dist/npm/* dist/npm/ 2>/dev/null || true
+          cp artifacts/npm-staged/glamfire-*.tgz . 2>/dev/null || true
+          ( cd dist-bin && sha256sum glam-* > SHA256SUMS.txt )
+          echo "Release assets:" && ls -la dist-bin
+      - name: verify the version in the artifact matches the tag
+        run: |
+          set -euo pipefail
+          VERSION="$(cat VERSION)"
+          REF="${{ github.event.inputs.tag || github.ref_name }}"
+          if [ "v$VERSION" != "$REF" ]; then
+            echo "VERSION file ($VERSION) does not match tag ($REF)"; exit 1
+          fi
+          echo "version $VERSION matches tag $REF"
+      - name: generate SBOM (CycloneDX)
+        run: node scripts/build-sbom.mjs --out "dist-bin/sbom-$(cat VERSION).cdx.json"
+      - name: render package-manager manifests
+        run: node scripts/render-manifests.mjs
+      - name: sign checksums (sigstore/cosign, keyless OIDC)
+        uses: sigstore/cosign-installer@v3
+      - name: cosign sign-blob SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          cd dist-bin
+          cosign sign-blob --yes \
+            --output-signature SHA256SUMS.txt.sig \
+            --output-certificate SHA256SUMS.txt.pem \
+            SHA256SUMS.txt
+      - name: create GitHub Release with all artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --generate-notes \
+            dist-bin/glam-* \
+            dist-bin/SHA256SUMS.txt \
+            dist-bin/SHA256SUMS.txt.sig \
+            dist-bin/SHA256SUMS.txt.pem \
+            dist-bin/sbom-*.cdx.json \
+            glamfire-*.tgz
+
+      # --- gated publishes (no-op until the maintainer adds the secret) ----------
+      - name: publish to npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        if: ${{ env.NPM_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          cd dist/npm
+          npm publish --provenance --access public
+      - name: skip npm publish (no NPM_TOKEN secret)
+        if: ${{ env.NPM_TOKEN == '' }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: echo "NPM_TOKEN not set — skipping npm publish (add the secret to enable)."
+
+      - name: publish Homebrew formula to the tap
+        env:
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+        if: ${{ env.HOMEBREW_TAP_DEPLOY_KEY != '' }}
+        run: bash scripts/publish-manifest.sh homebrew "$HOMEBREW_TAP_DEPLOY_KEY"
+      - name: publish Scoop manifest to the bucket
+        env:
+          SCOOP_BUCKET_DEPLOY_KEY: ${{ secrets.SCOOP_BUCKET_DEPLOY_KEY }}
+        if: ${{ env.SCOOP_BUCKET_DEPLOY_KEY != '' }}
+        run: bash scripts/publish-manifest.sh scoop "$SCOOP_BUCKET_DEPLOY_KEY"
+      - name: submit winget manifest
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        if: ${{ env.WINGET_TOKEN != '' }}
+        run: bash scripts/publish-manifest.sh winget "$WINGET_TOKEN"
+      - name: package-manager publish summary
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          SCOOP_BUCKET_DEPLOY_KEY: ${{ secrets.SCOOP_BUCKET_DEPLOY_KEY }}
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          # Report only presence/absence — never echo a secret value.
+          status() { if [ -n "$1" ]; then echo "published"; else echo "skipped (add $2)"; fi; }
+          {
+            echo "## Publish channels"
+            echo "- npm: $(status "$NPM_TOKEN" NPM_TOKEN)"
+            echo "- homebrew: $(status "$HOMEBREW_TAP_DEPLOY_KEY" HOMEBREW_TAP_DEPLOY_KEY)"
+            echo "- scoop: $(status "$SCOOP_BUCKET_DEPLOY_KEY" SCOOP_BUCKET_DEPLOY_KEY)"
+            echo "- winget: $(status "$WINGET_TOKEN" WINGET_TOKEN)"
+          } >> "$GITHUB_STEP_SUMMARY"

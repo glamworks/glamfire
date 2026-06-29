@@ -1,6 +1,9 @@
 node_modules/
 dist/
+dist-bin/
 build/
+*.tgz
+sbom*.json
 *.log
 .DS_Store
 .env

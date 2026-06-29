@@ -7,8 +7,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  smoke:
-    name: smoke (${{ matrix.os }})
+  # Full gate battery on all three OSes as equals (SPEC §7).
+  gates:
+    name: gates (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -16,21 +17,50 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '9.12.0'
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: build
+        run: pnpm -r build
+      - name: typecheck
+        run: pnpm -r typecheck
+      - name: lint (biome)
+        run: pnpm run lint
+      - name: test (unit + regression)
+        run: pnpm test
       - name: glam version (version-in-output)
         run: node packages/cli/src/index.mjs --version
-      - name: smoke test (real CLI, like a human)
+      - name: smoke (real CLI, like a human)
         run: node scripts/smoke.mjs
 
-  lint:
-    name: lint (biome)
-    runs-on: ubuntu-latest
+  # Verify the distributable artifacts really build and run (issue #8): bun builds
+  # the self-contained npm bundle and the host single-file binary, then the actual
+  # `glam` is run from each and its version is asserted against VERSION.
+  package:
+    name: package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.9'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '9.12.0'
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: biome check
-        run: npx --yes @biomejs/biome@1.9.4 check .
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r build
+      - name: build + run the npm bundle and the host binary
+        run: bun scripts/verify-artifacts.mjs
