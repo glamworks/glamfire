@@ -1,0 +1,8 @@
+{
+  "name": "@glamfire/team",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Self-hosted team harness surfaces (Slack/Discord/HTTP) over owned context (SPEC 5.6).",
+  "license": "Apache-2.0",
+  "type": "module"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@glamfire/adapters",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Per-model harnesses (fireworks-glm, anthropic, openai, local) behind one conformance-tested contract (SPEC 5.4).",
+  "license": "Apache-2.0",
+  "type": "module"
+}

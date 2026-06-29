@@ -1,0 +1,8 @@
+{
+  "name": "@glamfire/sdk",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Typed programmatic API exposing engine, brain, router, skills (SPEC 5.7).",
+  "license": "Apache-2.0",
+  "type": "module"
+}
