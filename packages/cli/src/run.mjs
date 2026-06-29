@@ -39,6 +39,8 @@ Options:
   --show-thinking        Stream the model's reasoning tokens (dimmed)
   --explain              Print the routing decision (distribution, confidence, why)
   --yes                  Auto-approve "ask" tool permissions (else denied)
+  --allow-exec           Enable the run_command tool (exec, denied by default).
+                         Still requires approval: pair with --yes to run commands.
   --json                 Print the full structured step log as JSON at the end
   -h, --help             Show this help
 
@@ -56,6 +58,7 @@ function parseArgs(args) {
     showThinking: false,
     explain: false,
     yes: false,
+    allowExec: false,
     json: false,
   };
   const positional = [];
@@ -108,6 +111,9 @@ function parseArgs(args) {
         break;
       case '--yes':
         opts.yes = true;
+        break;
+      case '--allow-exec':
+        opts.allowExec = true;
         break;
       case '--json':
         opts.json = true;
@@ -208,7 +214,14 @@ export async function cmdRun(argv, { version }) {
   if (config.maxTokens !== undefined) runtimeConfig.maxTokens = config.maxTokens;
   if (config.seed !== undefined) runtimeConfig.seed = config.seed;
 
-  const policy = defaultPolicy(opts.yes ? { asker: () => true } : {});
+  // Least-privilege by default: writes ask (denied without --yes) and exec is
+  // denied outright. --allow-exec promotes ONLY run_command from deny to ask, so
+  // it still needs an approval (--yes) to actually run a command. The gate, not
+  // the model, makes every one of these decisions.
+  const policyOverrides = {};
+  if (opts.yes) policyOverrides.asker = () => true;
+  if (opts.allowExec) policyOverrides.toolOverrides = { run_command: 'ask' };
+  const policy = defaultPolicy(policyOverrides);
 
   // --- cost-aware routing (SPEC §5.3) ---
   // An explicit --model override bypasses routing for that run (the user asked
