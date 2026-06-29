@@ -20,10 +20,19 @@
     "glam": "node packages/cli/src/index.mjs",
     "version:print": "node scripts/version.mjs",
     "version:bump": "node scripts/bump-version.mjs",
-    "test": "node --test packages/**/test/*.test.mjs",
+    "build": "pnpm -r --filter \"./packages/*\" build",
+    "typecheck": "pnpm -r --filter \"./packages/*\" typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "smoke": "node scripts/smoke.mjs",
     "lint": "biome check .",
     "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   },
   "keywords": [
     "ai",
