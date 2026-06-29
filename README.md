@@ -159,12 +159,20 @@ every release.)
   GLM 5.2 round‑trip is pending a `FIREWORKS_API_KEY`** for human‑standard verification —
   we do not mark it DONE until a real Fireworks call is observed. No part of the path is
   faked.
+- **`anthropic` adapter** (Claude, native Messages API: system shaping, `tool_use`/
+  `tool_result` blocks, SSE `input_json_delta` fragment reassembly, cache‑aware pricing) —
+  the edge/escalation candidate, registered into the router's model registry. Plus a
+  shared **adapter conformance suite** (the same battery runs against `fireworks-glm` **and**
+  `anthropic`; a model is "supported" only when it's green). Verified against real captured
+  Anthropic + Fireworks wire fixtures; the **live Claude call is pending an `ANTHROPIC_API_KEY`**.
 
 **Specified, in active build** (lock‑step, no shims — see [SPEC](SPEC.md))
-- team harness · SDK · packaging. (The router's **cross‑provider** escalation — cheap GLM
-  → frontier — is real and asserted in‑process today; an end‑to‑end *live* cheap→frontier
-  cascade across two providers awaits the second provider adapter + its key. Same‑provider
-  routing and the full cascade machinery are working and tested now.)
+- second provider **Together AI** + **Qwen3‑Coder** (generalizing the OpenAI‑compatible
+  adapter; note: Together serves GLM‑5.2 at **FP4** vs Fireworks **FP8**, and Qwen3‑Coder‑Next
+  needs a *dedicated* endpoint — see [`research/23`](research/23-second-model-and-provider.md))
+  · cross‑platform install (npm + Homebrew + Scoop/winget) · team harness · SDK. The router's
+  **cross‑provider** escalation (cheap GLM → frontier Claude) is real, wired, and asserted
+  in‑process today; the *live* cheap→frontier cascade awaits provider keys only.
 
 If a capability is partial, the docs and this section say so. A feature is **DONE** only
 when a real human end‑user can use it.

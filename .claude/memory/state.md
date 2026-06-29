@@ -22,7 +22,15 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
 - **`@glamfire/skills`** — self-contained skill dirs (skill.json manifest + .mjs handlers
   + neutral template + episodes + verifier), loader + `installSkills → {system,tools}`,
   example `code-explainer`. Composes onto engine contract; not yet wired to a CLI command.
-- `scripts/smoke.mjs` (drives real CLI + `glam run`/`glam config`); version source-of-truth.
+- **`@glamfire/router`** + `glam route` — center/edge classifier (feature-based, non-verbalized
+  confidence), declarative policy (config `routing.rules`, first-match, capability+maxUsd filter,
+  cheapest survivor), escalation cascade (verify→escalate, real `escalation` step, budget-bound),
+  distribution report. Wired into engine via additive `RouterHook` in `loop.ts` (omit = legacy
+  behavior). `glam route "<prompt>"` = offline dry-run, no key. Fully working offline.
+- **`anthropic` adapter** (Claude Messages API) + **adapter conformance suite** (same battery vs
+  fireworks-glm + anthropic; "supported" = green). Registered in router registry
+  (`packages/cli/src/router.mjs`). Live Claude call pending ANTHROPIC_API_KEY.
+- `scripts/smoke.mjs` (drives real CLI + `glam run`/`glam config`/`glam route`); version source.
 
 **Built, gates green, NOT yet DONE (live call pending key)**
 - `glam run` + `@glamfire/engine` (plan→act→observe loop, real tools, permission gate,
@@ -46,5 +54,16 @@ cheapest-first model ids). Capability tokens mirror engine `Capabilities`: `tool
 replaces the placeholder `route_decision` in engine `loop.ts`; emits `escalation` steps.
 Real cascade/escalation needs a 2nd adapter (anthropic/openai) — pair router with one.
 
-**Next**: (1) get FIREWORKS_API_KEY → live-verify `glam run` → release 0.1.0. (2) Wave 3:
-router + a 2nd adapter (anthropic) together; then team Slack surface, SDK, packaging.
+**User decisions (2026-06-29)**: 2nd provider = **Together AI**; 2nd open model = **Qwen3-Coder**
+(`Qwen/Qwen3-Coder-Next`, Apache-2.0, FP8); **memecoin = prepare-don't-launch** (spec+mint scripts,
+STATUS=NOT LIVE, user funds/approves to mint — never launch unilaterally); **packaging = I-prep,
+user-holds-keys** (build binaries+npm+brew/scoop/winget manifests+CI; user adds npm token + brew tap).
+CAVEAT (research/23): no US host serves BOTH GLM-5.2 + Qwen3-Coder-Next on shared serverless FP8 today
+— Together serves GLM-5.2 at **FP4** (downgrade vs Fireworks FP8), Qwen3-Coder-Next needs *dedicated*
+endpoint. Build Together adapter anyway (OpenAI-compat, parameterized), document caveat honestly.
+
+**Next**: (1) FIREWORKS_API_KEY → live-verify `glam run` → release 0.1.0 (still pending user key).
+(2) Together+Qwen adapter — generalize fireworks-glm into provider-parameterized OpenAI-compat adapter
+({baseURL, apiKey, logical→provider model-id map}), extend conformance. (3) packaging (#8, I-prep).
+(4) memecoin prepare (marketing/, Solana SPL scripts, STATUS NOT LIVE). (5) dogfood transition
+(research/22) once `glam run` live-verified. (6) team Slack (#7), SDK.

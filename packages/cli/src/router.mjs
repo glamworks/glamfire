@@ -3,7 +3,12 @@
 // declarative routing policy. Shared by `glam run` (live) and `glam route`
 // (offline dry-run).
 
-import { createFireworksGlmAdapter, resolveFireworksConfig } from '@glamfire/adapters';
+import {
+  createAnthropicAdapter,
+  createFireworksGlmAdapter,
+  resolveAnthropicConfig,
+  resolveFireworksConfig,
+} from '@glamfire/adapters';
 import { ModelRegistry, Router, descriptorFromAdapter } from '@glamfire/router';
 
 /**
@@ -41,6 +46,28 @@ export function buildModelRegistry(glamConfig, env, { allowDryRunKey = false } =
     };
     if (fwConfig.maxTokens !== undefined) runtimeConfig.maxTokens = fwConfig.maxTokens;
     if (fwConfig.seed !== undefined) runtimeConfig.seed = fwConfig.seed;
+    registry.add(descriptorFromAdapter(adapter, runtimeConfig));
+  }
+
+  // Anthropic (Claude) — the edge/escalation candidate. Only models the team has
+  // explicitly listed under `providers.anthropic.models` are registered; with the
+  // default (empty) list nothing is wired, so the router never pretends an
+  // escalation path exists that the config didn't ask for.
+  const anthropicModels = new Set(glamConfig.providers.anthropic.models);
+  for (const modelId of anthropicModels) {
+    const overrides = { model: modelId };
+    if (allowDryRunKey && !env.ANTHROPIC_API_KEY) {
+      overrides.apiKey = 'dry-run-no-provider-call';
+    }
+    const anthropicConfig = resolveAnthropicConfig(env, overrides, { config: glamConfig });
+    const adapter = createAnthropicAdapter(anthropicConfig);
+    const runtimeConfig = { model: modelId };
+    if (anthropicConfig.maxTokens !== undefined)
+      runtimeConfig.maxTokens = anthropicConfig.maxTokens;
+    if (anthropicConfig.temperature !== undefined) {
+      runtimeConfig.temperature = anthropicConfig.temperature;
+    }
+    if (anthropicConfig.effort !== undefined) runtimeConfig.effort = anthropicConfig.effort;
     registry.add(descriptorFromAdapter(adapter, runtimeConfig));
   }
 
