@@ -86,8 +86,16 @@ CAVEAT (research/23): no US host serves BOTH GLM-5.2 + Qwen3-Coder-Next on share
 — Together serves GLM-5.2 at **FP4** (downgrade vs Fireworks FP8), Qwen3-Coder-Next needs *dedicated*
 endpoint. Build Together adapter anyway (OpenAI-compat, parameterized), document caveat honestly.
 
-**Next**: (1) FIREWORKS_API_KEY → live-verify `glam run` → release 0.1.0 (still pending user key).
-(2) Together+Qwen adapter — generalize fireworks-glm into provider-parameterized OpenAI-compat adapter
-({baseURL, apiKey, logical→provider model-id map}), extend conformance. (3) packaging (#8, I-prep).
-(4) memecoin prepare (marketing/, Solana SPL scripts, STATUS NOT LIVE). (5) dogfood transition
-(research/22) once `glam run` live-verified. (6) team Slack (#7), SDK.
+**DONE since (all on main, verified, 204 tests)**: Together+Qwen adapter, packaging (#8),
+memecoin prep, engine edit/run tools, dogfood harness. Closed issues: #4 #5 #6 #8 #12 (#10 RFC realized).
+
+**Next (blocked on USER — the headline)**: (1) **FIREWORKS_API_KEY** → live-verify `glam run`
+(use `packages/adapters/MANUAL-VERIFY.md`) → **release 0.1.0** (bump→commit→push→tag per /ship) →
+run dogfood M0/M1 (`scripts/dogfood.mjs`). (2) **Publish**: user adds repo secrets NPM_TOKEN +
+brew/scoop/winget deploy keys + creates glamworks/homebrew-tap + glamworks/scoop-bucket → tag
+v0.1.0 publishes everywhere. Per CLAUDE.md §3 do NOT race more breadth ahead while the core
+inference path is live-unverified.
+
+**Next (key-independent, lock-step, when ready)**: team Slack surface (#7, live needs Slack token),
+`@glamfire/sdk` (typed API over engine/brain/router/skills), server/daemon mode, Docker. Open
+issues remaining: #1 (north star), #2 #3 #9 (live-call pending key), #7 (team), #11 (quickstart docs), #13 (join us).
