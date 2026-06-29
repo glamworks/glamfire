@@ -1,0 +1,35 @@
+{
+  "id": "9a2d-together-glm-multitool-001",
+  "object": "chat.completion",
+  "model": "zai-org/GLM-5.2",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Let me check both cities.",
+        "tool_calls": [
+          {
+            "index": 0,
+            "id": "call_tg_glm_paris",
+            "type": "function",
+            "function": { "name": "get_weather", "arguments": "{\"city\": \"Paris\"}" }
+          },
+          {
+            "index": 1,
+            "id": "call_tg_glm_london",
+            "type": "function",
+            "function": { "name": "get_weather", "arguments": "{\"city\": \"London\"}" }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 521,
+    "completion_tokens": 77,
+    "total_tokens": 598,
+    "prompt_tokens_details": { "cached_tokens": 0 }
+  }
+}

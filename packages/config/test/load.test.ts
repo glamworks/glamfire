@@ -41,6 +41,27 @@ describe('built-in defaults (zero config files)', () => {
   });
 });
 
+describe('providers: second inference provider (Together AI, research/23)', () => {
+  it('ships a wired-but-unlisted together provider by default', () => {
+    const loaded = loadConfig({ cwd: project, home, env: {} });
+    const together = loaded.config.providers.together;
+    expect(together.baseUrl).toBe('https://api.together.xyz/v1');
+    // Unlisted by default (like anthropic): nothing is registered unasked.
+    expect(together.models).toEqual([]);
+    expect(together.credential).toEqual({ env: 'TOGETHER_API_KEY' });
+  });
+
+  it('lets a project list GLM-5.2 + Qwen3-Coder-Next on Together', () => {
+    writeProject('[providers.together]\nmodels = ["zai-org/GLM-5.2", "Qwen/Qwen3-Coder-Next"]\n');
+    const loaded = loadConfig({ cwd: project, home, env: {} });
+    expect(loaded.config.providers.together.models).toEqual([
+      'zai-org/GLM-5.2',
+      'Qwen/Qwen3-Coder-Next',
+    ]);
+    expect(loaded.provenance['providers.together.models']).toBe('project');
+  });
+});
+
 describe('layer precedence: default < user < project < env < override', () => {
   it('user config overrides defaults', () => {
     writeUser('model = "user-model"\n[run]\neffort = "max"\n');

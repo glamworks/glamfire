@@ -25,6 +25,22 @@ models = ["accounts/fireworks/models/glm-5p2"]
 # Resolve the key from an environment variable:
 credential = { env = "FIREWORKS_API_KEY" }
 
+# Together AI — second OpenAI-compatible inference provider (research/23). A
+# respected, US-hosted (SOC 2 Type 2 + HIPAA) peer to Fireworks with an explicit
+# Zero Data Retention opt-in. Serves BOTH open-weight models below. Uncomment to
+# make Qwen-on-Together (and a second GLM-5.2 host) routing candidates.
+#
+# HONESTY CAVEATS (research/23, recorded per model in the adapter):
+#   - zai-org/GLM-5.2 is served at **FP4** here — a real quantization downgrade
+#     vs Fireworks/Baseten FP8. Prefer Fireworks for GLM quality; use Together's
+#     GLM only as a cheaper/secondary host.
+#   - Qwen/Qwen3-Coder-Next (FP8, 256K, non-thinking, native tool-calling) is the
+#     cheaper/faster coding-agent second tier, served via a DEDICATED endpoint.
+# [providers.together]
+# baseUrl = "https://api.together.xyz/v1"
+# models = ["zai-org/GLM-5.2", "Qwen/Qwen3-Coder-Next"]
+# credential = { env = "TOGETHER_API_KEY" }
+
 [providers.anthropic]
 baseUrl = "https://api.anthropic.com"
 models = ["claude-sonnet-4-5"]
@@ -65,6 +81,16 @@ distribution = "edge"
 maxConfidence = 0.5
 requires = ["tool_calling", "long_context"]
 candidates = ["claude-sonnet-4-5", "accounts/fireworks/models/glm-5p2"]
+
+# Tool-heavy coding agent loops -> prefer the cheap/fast coding model
+# (Qwen3-Coder-Next on Together, FP8, native tool-calling) and fall back to the
+# GLM-5.2 workhorse. Candidates are ordered cheapest-first; the router filters by
+# the capabilities in `requires` and picks the cheapest survivor (SPEC §5.3).
+# Requires `providers.together` above to be uncommented so the model is wired.
+# [[routing.rules]]
+# distribution = "center"
+# requires = ["tool_calling", "long_context"]
+# candidates = ["Qwen/Qwen3-Coder-Next", "accounts/fireworks/models/glm-5p2"]
 
 # ---------------------------------------------------------------------------
 # Permissions — default verdict per privilege class, enforced by the engine, not

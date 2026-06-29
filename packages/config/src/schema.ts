@@ -16,6 +16,13 @@ export const FIREWORKS_DEFAULT_BASE_URL = 'https://api.fireworks.ai/inference/v1
 /** Fireworks model id for GLM-5.2 serverless (research/02). */
 export const GLM_DEFAULT_MODEL = 'accounts/fireworks/models/glm-5p2';
 
+/** Together AI — second OpenAI-compatible inference provider (research/23). */
+export const TOGETHER_DEFAULT_BASE_URL = 'https://api.together.xyz/v1';
+/** GLM-5.2 on Together (HF-style id), served at FP4 (research/23 §2). */
+export const TOGETHER_GLM_MODEL = 'zai-org/GLM-5.2';
+/** Qwen3-Coder-Next on Together — the second open-weight model, FP8 (research/23 §1). */
+export const TOGETHER_QWEN_MODEL = 'Qwen/Qwen3-Coder-Next';
+
 // --- credential references (never an inline secret) --------------------------
 
 /** Resolve a credential from a named environment variable. */
@@ -45,6 +52,7 @@ export type ProviderConfig = z.infer<typeof providerSchema>;
 
 export const providersSchema = z.strictObject({
   fireworks: providerSchema,
+  together: providerSchema,
   anthropic: providerSchema,
   openai: providerSchema,
   local: providerSchema,
@@ -178,6 +186,15 @@ export function builtinDefaults(): GlamConfig {
         baseUrl: FIREWORKS_DEFAULT_BASE_URL,
         models: [GLM_DEFAULT_MODEL],
         credential: { env: 'FIREWORKS_API_KEY' },
+      },
+      // Together AI — second OpenAI-compatible provider (research/23). Wired but
+      // unlisted by default (like anthropic): the harness only registers the
+      // models a user explicitly lists, so it never assumes a Together key
+      // exists or routes there unasked. See glam.example.toml to enable.
+      together: {
+        baseUrl: TOGETHER_DEFAULT_BASE_URL,
+        models: [],
+        credential: { env: 'TOGETHER_API_KEY' },
       },
       anthropic: {
         baseUrl: 'https://api.anthropic.com',

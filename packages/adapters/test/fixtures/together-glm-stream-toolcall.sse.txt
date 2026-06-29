@@ -1,0 +1,17 @@
+data: {"id":"tg-glm-tc","object":"chat.completion.chunk","created":1719700000,"model":"zai-org/GLM-5.2","choices":[{"index":0,"delta":{"role":"assistant","content":"","reasoning_content":"The user wants me to compute "},"finish_reason":null}]}
+
+data: {"id":"tg-glm-tc","object":"chat.completion.chunk","created":1719700000,"model":"zai-org/GLM-5.2","choices":[{"index":0,"delta":{"reasoning_content":"(2 + 3) * 4. I'll use the calculator tool."},"finish_reason":null}]}
+
+data: {"id":"tg-glm-tc","object":"chat.completion.chunk","created":1719700000,"model":"zai-org/GLM-5.2","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_tg_glm_str1","type":"function","function":{"name":"calculator","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"tg-glm-tc","object":"chat.completion.chunk","created":1719700000,"model":"zai-org/GLM-5.2","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"expr"}}]},"finish_reason":null}]}
+
+data: {"id":"tg-glm-tc","object":"chat.completion.chunk","created":1719700000,"model":"zai-org/GLM-5.2","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ession\": \"(2 + "}}]},"finish_reason":null}]}
+
+data: {"id":"tg-glm-tc","object":"chat.completion.chunk","created":1719700000,"model":"zai-org/GLM-5.2","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"3) * 4\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"tg-glm-tc","object":"chat.completion.chunk","created":1719700000,"model":"zai-org/GLM-5.2","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: {"id":"tg-glm-tc","object":"chat.completion.chunk","created":1719700000,"model":"zai-org/GLM-5.2","choices":[],"usage":{"prompt_tokens":300,"completion_tokens":45,"prompt_tokens_details":{"cached_tokens":240},"total_tokens":345}}
+
+data: [DONE]

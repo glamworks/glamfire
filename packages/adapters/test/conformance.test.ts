@@ -1,20 +1,25 @@
-// The SAME conformance battery, run against BOTH first-class adapters
-// (fireworks-glm and anthropic) using each provider's captured real wire
-// fixtures. This is the gate from SPEC §5.4: a model/adapter is "supported"
-// only when this is green. See ../conformance/README.md.
+// The SAME conformance battery, run against EVERY adapter using each provider's
+// captured real wire fixtures: fireworks-glm (GLM-5.2), together (GLM-5.2 FP4 +
+// Qwen3-Coder-Next FP8 on Together AI), and anthropic (Claude). This is the gate
+// from SPEC §5.4: a model/adapter is "supported" only when this is green. See
+// ../conformance/README.md.
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  TOGETHER_GLM_MODEL,
+  TOGETHER_QWEN_MODEL,
   createAnthropicAdapter,
   createFireworksGlmAdapter,
+  createTogetherAdapter,
   parseAnthropicSSE,
   parseSSE,
   reduceAnthropicStream,
   reduceStream,
   resolveAnthropicConfig,
   resolveFireworksConfig,
+  resolveTogetherConfig,
 } from '@glamfire/adapters';
 import type { ProviderRequest, RunState, ToolSpec } from '@glamfire/engine';
 import { type RequestFacts, runConformance } from '../conformance/index.js';
@@ -136,6 +141,100 @@ runConformance(() => {
     expectStreamText: { textIncludes: 'equals 20', finishReason: 'stop' },
   };
 });
+
+// --- together / GLM-5.2 (FP4): OpenAI-compatible, same wire extraction --------
+runConformance(() => {
+  const config = resolveTogetherConfig(
+    { TOGETHER_API_KEY: 'test-key' },
+    { model: TOGETHER_GLM_MODEL },
+  );
+  return {
+    adapter: createTogetherAdapter(config),
+    sampleState: sampleState(config.model),
+    inspectRequest: inspectFireworksRequest,
+    toolCallCompletion: {
+      raw: json('together-glm-completion-toolcall.json'),
+      text: "I'll compute that.",
+      reasoning: 'Need to evaluate (2 + 3) * 4 with the calculator.',
+      toolCalls: [
+        { id: 'call_tg_glm_abc123', name: 'calculator', arguments: { expression: '(2 + 3) * 4' } },
+      ],
+      finishReason: 'tool_calls',
+      usage: { inputTokens: 488, cachedInputTokens: 96, outputTokens: 41 },
+    },
+    multiToolCompletion: {
+      raw: json('together-glm-completion-multitool.json'),
+      text: 'Let me check both cities.',
+      toolCalls: [
+        { id: 'call_tg_glm_paris', name: 'get_weather', arguments: { city: 'Paris' } },
+        { id: 'call_tg_glm_london', name: 'get_weather', arguments: { city: 'London' } },
+      ],
+      finishReason: 'tool_calls',
+      usage: { inputTokens: 521, cachedInputTokens: 0, outputTokens: 77 },
+    },
+    jsonCompletion: {
+      raw: json('together-glm-completion-json.json'),
+      expectJson: { answer: 20, unit: 'none' },
+    },
+    reduceToolCallStream: () =>
+      reduceStream(parseSSE(fixture('together-glm-stream-toolcall.sse.txt'))),
+    reduceTextStream: () => reduceStream(parseSSE(fixture('together-glm-stream-text.sse.txt'))),
+    expectStreamToolCall: {
+      name: 'calculator',
+      arguments: { expression: '(2 + 3) * 4' },
+      finishReason: 'tool_calls',
+    },
+    expectStreamText: { textIncludes: 'equals 20', finishReason: 'stop' },
+  };
+}, 'GLM-5.2 · FP4');
+
+// --- together / Qwen3-Coder-Next (FP8): non-thinking coding model -------------
+// Same shared battery; includes the required tool-call streaming fragment
+// reassembly for Qwen. Qwen3-Coder-Next is non-thinking -> reasoning is empty.
+runConformance(() => {
+  const config = resolveTogetherConfig(
+    { TOGETHER_API_KEY: 'test-key' },
+    { model: TOGETHER_QWEN_MODEL },
+  );
+  return {
+    adapter: createTogetherAdapter(config),
+    sampleState: sampleState(config.model),
+    inspectRequest: inspectFireworksRequest,
+    toolCallCompletion: {
+      raw: json('together-qwen-completion-toolcall.json'),
+      text: "I'll compute that.",
+      reasoning: '',
+      toolCalls: [
+        { id: 'call_qwen_abc123', name: 'calculator', arguments: { expression: '(2 + 3) * 4' } },
+      ],
+      finishReason: 'tool_calls',
+      usage: { inputTokens: 415, cachedInputTokens: 0, outputTokens: 33 },
+    },
+    multiToolCompletion: {
+      raw: json('together-qwen-completion-multitool.json'),
+      text: 'Let me check both cities.',
+      toolCalls: [
+        { id: 'call_qwen_paris', name: 'get_weather', arguments: { city: 'Paris' } },
+        { id: 'call_qwen_london', name: 'get_weather', arguments: { city: 'London' } },
+      ],
+      finishReason: 'tool_calls',
+      usage: { inputTokens: 430, cachedInputTokens: 0, outputTokens: 61 },
+    },
+    jsonCompletion: {
+      raw: json('together-qwen-completion-json.json'),
+      expectJson: { answer: 20, unit: 'none' },
+    },
+    reduceToolCallStream: () =>
+      reduceStream(parseSSE(fixture('together-qwen-stream-toolcall.sse.txt'))),
+    reduceTextStream: () => reduceStream(parseSSE(fixture('together-qwen-stream-text.sse.txt'))),
+    expectStreamToolCall: {
+      name: 'calculator',
+      arguments: { expression: '(2 + 3) * 4' },
+      finishReason: 'tool_calls',
+    },
+    expectStreamText: { textIncludes: 'equals 20', finishReason: 'stop' },
+  };
+}, 'Qwen3-Coder-Next · FP8');
 
 runConformance(() => {
   const config = resolveAnthropicConfig({ ANTHROPIC_API_KEY: 'test-key' });

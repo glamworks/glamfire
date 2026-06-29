@@ -1,0 +1,35 @@
+{
+  "id": "d5b2-together-qwen-multitool-001",
+  "object": "chat.completion",
+  "model": "Qwen/Qwen3-Coder-Next",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Let me check both cities.",
+        "tool_calls": [
+          {
+            "index": 0,
+            "id": "call_qwen_paris",
+            "type": "function",
+            "function": { "name": "get_weather", "arguments": "{\"city\": \"Paris\"}" }
+          },
+          {
+            "index": 1,
+            "id": "call_qwen_london",
+            "type": "function",
+            "function": { "name": "get_weather", "arguments": "{\"city\": \"London\"}" }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 430,
+    "completion_tokens": 61,
+    "total_tokens": 491,
+    "prompt_tokens_details": { "cached_tokens": 0 }
+  }
+}

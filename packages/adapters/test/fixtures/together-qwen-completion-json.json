@@ -1,0 +1,21 @@
+{
+  "id": "e9f7-together-qwen-json-001",
+  "object": "chat.completion",
+  "model": "Qwen/Qwen3-Coder-Next",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"answer\": 20, \"unit\": \"none\"}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 88,
+    "completion_tokens": 12,
+    "total_tokens": 100,
+    "prompt_tokens_details": { "cached_tokens": 0 }
+  }
+}
