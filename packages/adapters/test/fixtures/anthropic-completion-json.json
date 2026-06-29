@@ -1,0 +1,15 @@
+{
+  "id": "msg_01Cd9eFg3iKl6n0q4rStU7Vw",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-4-8",
+  "content": [{ "type": "text", "text": "{\"answer\": 20, \"unit\": \"none\"}" }],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 96,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 14
+  }
+}

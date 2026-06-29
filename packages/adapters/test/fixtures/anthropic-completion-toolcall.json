@@ -1,0 +1,23 @@
+{
+  "id": "msg_01Az3kRQ9xPq7n4w2sVbT8Hd",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-4-8",
+  "content": [
+    { "type": "text", "text": "I'll compute that." },
+    {
+      "type": "tool_use",
+      "id": "toolu_01Xp4mNc2gKb9YvRf7wQ3aLe",
+      "name": "calculator",
+      "input": { "expression": "(2 + 3) * 4" }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 472,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 128,
+    "output_tokens": 38
+  }
+}
