@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getVersion } from '../../../scripts/version.mjs';
+import { cmdRun } from './run.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const VERSION = getVersion();
@@ -16,6 +17,7 @@ const HELP = `${BANNER}
 Usage: glam <command> [options]
 
 Commands:
+  run "<prompt>"     Run a task against GLM 5.2 on Fireworks (real inference)
   version            Print the glamfire version
   doctor             Check the local environment is ready to run glamfire
   help               Show this help
@@ -59,7 +61,7 @@ function cmdDoctor() {
   process.exitCode = allOk ? 0 : 1;
 }
 
-function main(argv) {
+async function main(argv) {
   const args = argv.slice(2);
   const first = args[0];
   if (first === '-v' || first === '--version' || first === 'version') return cmdVersion();
@@ -68,8 +70,12 @@ function main(argv) {
     return;
   }
   if (first === 'doctor') return cmdDoctor();
+  if (first === 'run') return cmdRun(args.slice(1), { version: VERSION });
   process.stderr.write(`glam: unknown command "${first}"\nRun \`glam help\`.\n`);
   process.exitCode = 2;
 }
 
-main(process.argv);
+main(process.argv).catch((err) => {
+  process.stderr.write(`glam: ${err?.stack ?? err}\n`);
+  process.exitCode = 1;
+});

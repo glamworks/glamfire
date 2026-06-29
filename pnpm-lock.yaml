@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@biomejs/biome':
         specifier: 1.9.4
@@ -21,11 +25,25 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.0)
 
-  packages/adapters: {}
+  packages/adapters:
+    dependencies:
+      '@glamfire/engine':
+        specifier: workspace:*
+        version: link:../engine
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/brain: {}
 
-  packages/cli: {}
+  packages/cli:
+    dependencies:
+      '@glamfire/adapters':
+        specifier: workspace:*
+        version: link:../adapters
+      '@glamfire/engine':
+        specifier: workspace:*
+        version: link:../engine
 
   packages/config: {}
 
@@ -582,6 +600,9 @@ packages:
     engines: {node: '>=8'}
     hasBin: true
 
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
 snapshots:
 
   '@biomejs/biome@1.9.4':
@@ -1009,3 +1030,5 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
+
+  zod@4.4.3: {}

@@ -22,8 +22,10 @@
     "version:bump": "node scripts/bump-version.mjs",
     "build": "pnpm -r --filter \"./packages/*\" build",
     "typecheck": "pnpm -r --filter \"./packages/*\" typecheck",
+    "pretest": "pnpm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "presmoke": "pnpm run build",
     "smoke": "node scripts/smoke.mjs",
     "lint": "biome check .",
     "format": "biome format --write ."
@@ -46,5 +48,8 @@
     "open-source",
     "model-agnostic",
     "last-mile"
-  ]
+  ],
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
 }

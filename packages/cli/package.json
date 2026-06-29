@@ -7,5 +7,9 @@
   "bin": {
     "glam": "src/index.mjs"
   },
-  "files": ["src"]
+  "files": ["src"],
+  "dependencies": {
+    "@glamfire/engine": "workspace:*",
+    "@glamfire/adapters": "workspace:*"
+  }
 }

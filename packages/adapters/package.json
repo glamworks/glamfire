@@ -4,5 +4,22 @@
   "private": true,
   "description": "Per-model harnesses (fireworks-glm, anthropic, openai, local) behind one conformance-tested contract (SPEC 5.4).",
   "license": "Apache-2.0",
-  "type": "module"
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc --build tsconfig.json",
+    "typecheck": "tsc --build tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@glamfire/engine": "workspace:*",
+    "zod": "^4.4.3"
+  }
 }

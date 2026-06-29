@@ -1,0 +1,23 @@
+{
+  "id": "chatcmpl-nonstream",
+  "object": "chat.completion",
+  "created": 1719600200,
+  "model": "accounts/fireworks/models/glm-5p2",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "(2 + 3) * 4 equals 20.",
+        "reasoning_content": "Computed (2+3)=5, then 5*4=20."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 256,
+    "completion_tokens": 14,
+    "prompt_tokens_details": { "cached_tokens": 128 },
+    "total_tokens": 270
+  }
+}

@@ -4,5 +4,18 @@
   "private": true,
   "description": "The open engine — the agent loop: plan to act to observe, tool dispatch, permissions, sandboxing, streaming (SPEC 5.1).",
   "license": "Apache-2.0",
-  "type": "module"
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc --build tsconfig.json",
+    "typecheck": "tsc --build tsconfig.json --noEmit"
+  }
 }

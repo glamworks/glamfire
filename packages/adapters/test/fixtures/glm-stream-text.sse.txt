@@ -1,0 +1,13 @@
+data: {"id":"chatcmpl-txt","object":"chat.completion.chunk","created":1719600100,"model":"accounts/fireworks/models/glm-5p2","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"The tool returned 20. "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-txt","object":"chat.completion.chunk","created":1719600100,"model":"accounts/fireworks/models/glm-5p2","choices":[{"index":0,"delta":{"reasoning_content":"I can answer directly now."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-txt","object":"chat.completion.chunk","created":1719600100,"model":"accounts/fireworks/models/glm-5p2","choices":[{"index":0,"delta":{"content":"(2 + 3) * 4 "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-txt","object":"chat.completion.chunk","created":1719600100,"model":"accounts/fireworks/models/glm-5p2","choices":[{"index":0,"delta":{"content":"equals 20."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-txt","object":"chat.completion.chunk","created":1719600100,"model":"accounts/fireworks/models/glm-5p2","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"id":"chatcmpl-txt","object":"chat.completion.chunk","created":1719600100,"model":"accounts/fireworks/models/glm-5p2","choices":[],"usage":{"prompt_tokens":380,"completion_tokens":12,"prompt_tokens_details":{"cached_tokens":312},"total_tokens":392}}
+
+data: [DONE]

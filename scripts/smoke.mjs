@@ -61,5 +61,35 @@ check('unknown command exits non-zero', () => {
   }
 });
 
+check('glam run --help shows the run usage', () => {
+  const out = run('run', '--help');
+  if (!out.includes('glam run')) throw new Error('missing run usage header');
+  if (!out.includes('--effort')) throw new Error('missing --effort option');
+  if (!out.includes('FIREWORKS_API_KEY')) throw new Error('missing key requirement note');
+});
+
+check('glam run without a prompt exits 2', () => {
+  try {
+    run('run');
+    throw new Error('expected non-zero exit');
+  } catch (err) {
+    if (err.status !== 2) throw new Error(`expected exit 2, got ${err.status}`);
+  }
+});
+
+check('glam run without FIREWORKS_API_KEY fails with actionable guidance', () => {
+  // Real surface, real config resolution: with no key the run command must fail
+  // loudly and tell the user exactly what to do — never silently fake a call.
+  const { FIREWORKS_API_KEY: _omit, ...env } = process.env;
+  try {
+    execFileSync('node', [cli, 'run', 'say hi'], { encoding: 'utf8', env });
+    throw new Error('expected non-zero exit');
+  } catch (err) {
+    if (err.status !== 1) throw new Error(`expected exit 1, got ${err.status}`);
+    const text = String(err.stdout ?? '') + String(err.stderr ?? '');
+    if (!text.includes('FIREWORKS_API_KEY')) throw new Error('missing key guidance');
+  }
+});
+
 process.stdout.write(`\n${failures === 0 ? 'SMOKE PASS' : `SMOKE FAIL (${failures})`}\n`);
 process.exit(failures === 0 ? 0 : 1);

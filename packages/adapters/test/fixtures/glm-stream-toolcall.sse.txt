@@ -1,0 +1,17 @@
+data: {"id":"chatcmpl-tc","object":"chat.completion.chunk","created":1719600000,"model":"accounts/fireworks/models/glm-5p2","choices":[{"index":0,"delta":{"role":"assistant","content":"","reasoning_content":"The user wants me to compute "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-tc","object":"chat.completion.chunk","created":1719600000,"model":"accounts/fireworks/models/glm-5p2","choices":[{"index":0,"delta":{"reasoning_content":"(2 + 3) * 4. I'll use the calculator tool."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-tc","object":"chat.completion.chunk","created":1719600000,"model":"accounts/fireworks/models/glm-5p2","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_abc123","type":"function","function":{"name":"calculator","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-tc","object":"chat.completion.chunk","created":1719600000,"model":"accounts/fireworks/models/glm-5p2","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"expr"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-tc","object":"chat.completion.chunk","created":1719600000,"model":"accounts/fireworks/models/glm-5p2","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ession\": \"(2 + "}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-tc","object":"chat.completion.chunk","created":1719600000,"model":"accounts/fireworks/models/glm-5p2","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"3) * 4\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-tc","object":"chat.completion.chunk","created":1719600000,"model":"accounts/fireworks/models/glm-5p2","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: {"id":"chatcmpl-tc","object":"chat.completion.chunk","created":1719600000,"model":"accounts/fireworks/models/glm-5p2","choices":[],"usage":{"prompt_tokens":312,"completion_tokens":48,"prompt_tokens_details":{"cached_tokens":256},"total_tokens":360}}
+
+data: [DONE]
