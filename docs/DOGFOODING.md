@@ -75,6 +75,9 @@ and is recorded here.
 
 - **M0**: ready pending a `FIREWORKS_API_KEY` (Stage-0 harness wired; live call is
   the only missing step).
-- **M1**: edit + run tools landing in `@glamfire/engine`; then ready pending a key.
+- **M1**: edit + run tools **shipped** in `@glamfire/engine` (`write_file`/`edit_file` +
+  `run_command`, behind the least-privilege gate; `glam run --allow-exec --yes` to run the
+  edit loop). The read→edit→run→iterate-to-green cycle is proven through the engine loop
+  offline; now **ready pending a key** for the live model.
 - The transition stays **reversible** — Claude Code remains the backstop until a
   category's gate is genuinely met.

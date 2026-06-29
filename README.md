@@ -195,7 +195,11 @@ every release.)
 
 **Built, one step from DONE** (all gates green; the only unverified step is the live call)
 - **`glam run`** + **`@glamfire/engine`** (plan→act→observe loop, real tool dispatch,
-  least‑privilege permission gate, hard token/cost budget) + **`fireworks-glm` adapter**
+  least‑privilege permission gate, hard token/cost budget; sandboxed tools: `read_file`,
+  `write_file`/`edit_file` (cwd‑scoped, symlink‑escape‑defended, `write`=ask→deny), and
+  `run_command` (no‑shell, allowlisted, `exec`=**deny by default**, opt‑in via `--allow-exec`)
+  — enough to close the dogfood read→edit→run loop; full network‑egress isolation needs an
+  OS sandbox and is noted as a known limit) + **`fireworks-glm` adapter**
   (OpenAI‑compatible Fireworks transport, streaming tool‑call fragment reassembly,
   pricing). The whole vertical is built and tested against **real captured GLM wire
   fixtures** and driven through the actual binary over a loopback transport. The **live

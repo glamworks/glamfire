@@ -46,6 +46,14 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
   interactive typed confirm), guard test, finalized spec/runbook/disclaimer. STATUS marker
   `token-status: NOT_LIVE`. Launch needs user: funded keypair, hosted metadata, treasury multisig,
   explicit authorization. NEVER advertise/launch unilaterally.
+- **Engine edit/run tools (dogfood M1)** — `write_file`/`edit_file` (cwd-scoped, lexical +
+  symlink-escape defense, `write`=ask→deny) + `run_command` (no-shell spawn, allowlist before
+  spawn, `exec`=DENY by default even with asker; opt-in `glam run --allow-exec` → ask, needs
+  `--yes`; 30s timeout, 256KiB cap, credential env stripped). read→edit→run-to-green proven
+  through loop offline. KNOWN LIMIT: no OS-level network-egress isolation in pure Node
+  (credential-stripping is the honest partial measure; real isolation = container/namespace).
+- **Dogfood harness**: `scripts/dogfood.mjs` (drives real glam + gates; no key→exit 1, never
+  fakes) + `docs/DOGFOODING.md` (staged M0–M5, reversible). M0/M1 ready pending Fireworks key.
 - `scripts/smoke.mjs` (drives real CLI + `glam run`/`glam config`/`glam route`); version source.
 
 **Built, gates green, NOT yet DONE (live call pending key)**
