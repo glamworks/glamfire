@@ -10,6 +10,8 @@ import { basename, resolve } from 'node:path';
 import { createFireworksGlmAdapter, resolveFireworksConfig } from '@glamfire/adapters';
 import { ConfigError, loadConfig } from '@glamfire/config';
 import { builtinTools, defaultPolicy, runTask } from '@glamfire/engine';
+import { PolicyError, explainDecision } from '@glamfire/router';
+import { buildModelRegistry, buildRouter } from './router.mjs';
 
 const DIM = '\x1b[2m';
 const BOLD = '\x1b[1m';
@@ -35,15 +37,27 @@ Options:
   --max-steps <n>        Max plan->act->observe iterations (default: 8)
   --no-stream            Use a single non-streaming completion
   --show-thinking        Stream the model's reasoning tokens (dimmed)
+  --explain              Print the routing decision (distribution, confidence, why)
   --yes                  Auto-approve "ask" tool permissions (else denied)
   --json                 Print the full structured step log as JSON at the end
   -h, --help             Show this help
+
+The model is chosen by the cost-aware router from your routing policy (center work
+defaults to GLM 5.2 on Fireworks). Passing --model bypasses routing for that run.
+See \`glam route "<prompt>"\` for an offline routing preview.
 
 Requires FIREWORKS_API_KEY. Run \`glam doctor\` to check your environment.
 `;
 
 function parseArgs(args) {
-  const opts = { files: [], stream: true, showThinking: false, yes: false, json: false };
+  const opts = {
+    files: [],
+    stream: true,
+    showThinking: false,
+    explain: false,
+    yes: false,
+    json: false,
+  };
   const positional = [];
   for (let i = 0; i < args.length; i += 1) {
     const a = args[i];
@@ -87,6 +101,10 @@ function parseArgs(args) {
         break;
       case '--show-thinking':
         opts.showThinking = true;
+        break;
+      case '--explain':
+      case '--route':
+        opts.explain = true;
         break;
       case '--yes':
         opts.yes = true;
@@ -133,8 +151,10 @@ export async function cmdRun(argv, { version }) {
   // then resolve the Fireworks provider slice through it. CLI flags (overrides)
   // win over env, which wins over the config files (SPEC §6 precedence).
   let config;
+  let glamConfig;
   try {
     const loaded = loadConfig({ cwd: process.cwd(), env: process.env });
+    glamConfig = loaded.config;
     const overrides = {};
     if (opts.model !== undefined) overrides.model = opts.model;
     if (opts.effort !== undefined) overrides.reasoningEffort = opts.effort;
@@ -190,21 +210,52 @@ export async function cmdRun(argv, { version }) {
 
   const policy = defaultPolicy(opts.yes ? { asker: () => true } : {});
 
-  // --- run header (SPEC §9) ---
+  // --- cost-aware routing (SPEC §5.3) ---
+  // An explicit --model override bypasses routing for that run (the user asked
+  // for a specific model); otherwise the router selects from the routing policy
+  // and may escalate to a stronger model on a failed verification.
   const out = process.stdout;
+  let router;
+  let decision;
+  if (opts.model === undefined) {
+    try {
+      const registry = buildModelRegistry(glamConfig, process.env);
+      router = buildRouter(glamConfig, registry);
+      decision = router.decide(task); // pure preview for the header/--explain
+    } catch (err) {
+      if (err instanceof PolicyError) {
+        process.stderr.write(`glam run: ${err.message}\n`);
+        process.exitCode = 1;
+        return;
+      }
+      throw err;
+    }
+  }
+
+  // --- run header (SPEC §9) ---
   out.write(`${color(useColor, FLAME, `glamfire ${version}`)} ${color(useColor, DIM, '· run')}\n`);
-  out.write(`  adapter: ${adapter.id}   model: ${config.model}\n`);
-  out.write(
-    color(
-      useColor,
-      DIM,
-      '  routing: direct default-adapter selection (center/edge router not yet wired)\n',
-    ),
-  );
+  const chosenModel = decision ? decision.selection.chosen.id : config.model;
+  out.write(`  adapter: ${adapter.id}   model: ${chosenModel}\n`);
+  if (decision) {
+    const c = decision.classification;
+    out.write(
+      color(
+        useColor,
+        DIM,
+        `  routing: ${c.distribution} (score ${c.score.toFixed(2)}, confidence ${c.confidence.toFixed(2)}) → ${chosenModel}\n`,
+      ),
+    );
+  } else {
+    out.write(color(useColor, DIM, '  routing: explicit --model override (router bypassed)\n'));
+  }
   out.write(
     `  effort: ${config.reasoningEffort}   tier: ${config.serviceTier}   ` +
       `budget: ${fmtUSD(budget.maxUSD)} / ${budget.maxSteps} steps\n\n`,
   );
+
+  if (opts.explain && decision) {
+    out.write(`${color(useColor, DIM, explainDecision(decision))}\n\n`);
+  }
 
   let streamedTextThisTurn = false;
   const onToken = (ev) => {
@@ -249,6 +300,9 @@ export async function cmdRun(argv, { version }) {
       stream: opts.stream,
       onStep,
       onToken,
+      // The router (when not bypassed by --model) selects the model and drives
+      // verification/escalation; the engine still owns the loop + budget.
+      ...(router ? { router } : {}),
     });
   } catch (err) {
     process.stderr.write(`\nglam run: ${err.message}\n`);

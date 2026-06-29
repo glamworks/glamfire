@@ -80,6 +80,74 @@ check('glam run without a prompt exits 2', () => {
   }
 });
 
+check('glam help lists the route command', () => {
+  const out = run('help');
+  if (!out.includes('route')) throw new Error('help missing route command');
+});
+
+check('glam route --help shows the offline routing usage', () => {
+  const out = run('route', '--help');
+  if (!out.includes('glam route')) throw new Error('missing route usage header');
+  if (!out.includes('offline')) throw new Error('route help should note it is offline');
+});
+
+check('glam route without a prompt exits 2', () => {
+  try {
+    run('route');
+    throw new Error('expected non-zero exit');
+  } catch (err) {
+    if (err.status !== 2) throw new Error(`expected exit 2, got ${err.status}`);
+  }
+});
+
+check('glam route classifies a center prompt offline (no API key needed)', () => {
+  // The routing dry-run must work with NO key and never call a provider: it
+  // classifies, resolves the policy, and prints a decision + distribution report.
+  const { FIREWORKS_API_KEY: _omit, ...env } = process.env;
+  const out = execFileSync('node', [cli, 'route', 'Summarize this paragraph in one sentence.'], {
+    encoding: 'utf8',
+    env,
+  });
+  if (!/route decision/.test(out)) throw new Error('missing route decision block');
+  if (!/distribution:\s+center/.test(out))
+    throw new Error('center prompt not classified as center');
+  if (!/chosen model:\s+accounts\/fireworks\/models\/glm-5p2/.test(out)) {
+    throw new Error('center work should route to GLM 5.2 on Fireworks by default');
+  }
+  if (!/distribution report/.test(out)) throw new Error('missing distribution report');
+});
+
+check('glam route classifies a clearly-edge prompt as edge offline', () => {
+  const { FIREWORKS_API_KEY: _omit, ...env } = process.env;
+  const out = execFileSync(
+    'node',
+    [
+      cli,
+      'route',
+      'Design and architect a distributed system from scratch; reason step by step ' +
+        'about the trade-offs, prove correctness, and handle every tricky edge case.',
+    ],
+    { encoding: 'utf8', env },
+  );
+  if (!/distribution:\s+edge/.test(out)) throw new Error('edge prompt not classified as edge');
+});
+
+check('glam route --json emits valid structured output offline', () => {
+  const { FIREWORKS_API_KEY: _omit, ...env } = process.env;
+  const out = execFileSync('node', [cli, 'route', '--json', 'classify this ticket'], {
+    encoding: 'utf8',
+    env,
+  });
+  const parsed = JSON.parse(out);
+  if (parsed.classification?.distribution !== 'center') {
+    throw new Error('routine classify task should be center');
+  }
+  if (typeof parsed.classification.confidence !== 'number') {
+    throw new Error('confidence must be a number');
+  }
+  if (typeof parsed.report?.savedUsd !== 'number') throw new Error('report.savedUsd missing');
+});
+
 check('glam run without FIREWORKS_API_KEY fails with actionable guidance', () => {
   // Real surface, real config resolution: with no key the run command must fail
   // loudly and tell the user exactly what to do — never silently fake a call.

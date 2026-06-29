@@ -11,6 +11,8 @@ import {
   type FinalReason,
   type ModelTurnResult,
   type NeutralMessage,
+  type RouteClassification,
+  type RouterHook,
   type Run,
   type RunState,
   type Step,
@@ -45,6 +47,13 @@ export interface RunOptions {
   system?: string;
   /** Permission policy; defaults to least-privilege. */
   policy?: PermissionPolicy;
+  /**
+   * Cost-aware router (SPEC §5.3). When provided, it picks the initial model
+   * (overriding `adapter`/`config`) and may escalate to a stronger model after a
+   * failed verification. When omitted, the engine runs `adapter`/`config`
+   * directly and emits a plain `route_decision` step (legacy behavior).
+   */
+  router?: RouterHook;
   /** Stream tokens (true) or use a single non-streaming completion (false). */
   stream?: boolean;
   /** Called with every recorded step as it happens. */
@@ -67,7 +76,11 @@ function composeFirstMessage(task: Task): string {
 }
 
 export async function runTask(opts: RunOptions): Promise<Run> {
-  const { task, adapter, tools, config, cwd } = opts;
+  const { task, tools, cwd } = opts;
+  // The active model can change mid-run when the router escalates; the engine
+  // keeps owning the loop, budget, and permissions regardless.
+  let activeAdapter: StreamingAdapter = opts.adapter;
+  let activeConfig: AdapterRuntimeConfig = opts.config;
   const policy = opts.policy ?? defaultPolicy();
   const system = opts.system ?? DEFAULT_SYSTEM;
   const useStream = opts.stream ?? true;
@@ -96,13 +109,30 @@ export async function runTask(opts: RunOptions): Promise<Run> {
     return run;
   };
 
-  // Honest: direct default-adapter selection. The center/edge router is a
-  // separate subsystem; when it lands it replaces this single decision.
+  // Routing decision (SPEC §5.3). With a router hook the cheapest capable model
+  // is chosen from the declarative policy and its classification is logged; with
+  // no router we fall back to the directly-supplied default adapter.
+  let routeReason = 'direct default-adapter selection (center/edge router not wired)';
+  let classification: RouteClassification | undefined;
+  if (opts.router) {
+    const selection = opts.router.select(task);
+    activeAdapter = selection.adapter;
+    activeConfig = selection.config;
+    routeReason = selection.reason;
+    classification = selection.classification;
+  }
   emit({
     type: 'route_decision',
-    adapter: adapter.id,
-    model: config.model,
-    reason: 'direct default-adapter selection (center/edge router not yet wired)',
+    adapter: activeAdapter.id,
+    model: activeConfig.model,
+    reason: routeReason,
+    ...(classification
+      ? {
+          distribution: classification.distribution,
+          confidence: classification.confidence,
+          score: classification.score,
+        }
+      : {}),
   });
 
   const messages: NeutralMessage[] = [{ role: 'user', content: composeFirstMessage(task) }];
@@ -117,19 +147,19 @@ export async function runTask(opts: RunOptions): Promise<Run> {
       return finish(run.output, 'budget_exhausted', 'budget_exhausted');
     }
 
-    const state: RunState = { system, task, messages, tools: tools.list(), config };
+    const state: RunState = { system, task, messages, tools: tools.list(), config: activeConfig };
 
     let result: ModelTurnResult;
     try {
       result = useStream
-        ? await adapter.stream(state, (ev: StreamEvent) => onToken(ev))
-        : await adapter.complete(state);
+        ? await activeAdapter.stream(state, (ev: StreamEvent) => onToken(ev))
+        : await activeAdapter.complete(state);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return finish(`engine error: ${msg}`, 'error', 'error');
     }
 
-    const cost = adapter.pricing(result.usage);
+    const cost = activeAdapter.pricing(result.usage);
     run.usage = addUsage(run.usage, result.usage);
     run.costUSD += cost;
 
@@ -151,6 +181,44 @@ export async function runTask(opts: RunOptions): Promise<Run> {
     });
 
     if (result.toolCalls.length === 0) {
+      // The model produced a final answer. Offer it to the router for
+      // verification + possible escalation to a stronger model (SPEC §5.3). The
+      // engine still owns the loop: an escalation just swaps the active model and
+      // continues, so the budget ceiling keeps bounding the whole cascade.
+      if (opts.router?.review) {
+        const review = await opts.router.review({
+          task,
+          output: result.text,
+          run,
+          currentModel: activeConfig.model,
+        });
+        if (review.verification) {
+          emit({
+            type: 'verification',
+            passed: review.verification.passed,
+            detail: review.verification.detail,
+          });
+        }
+        if (review.escalation) {
+          emit({
+            type: 'escalation',
+            from: review.escalation.from,
+            to: review.escalation.to,
+            trigger: review.escalation.trigger,
+          });
+          activeAdapter = review.escalation.adapter;
+          activeConfig = review.escalation.config;
+          // Keep the best-so-far answer in case the cascade later runs out of
+          // budget or candidates before producing a better one.
+          run.output = result.text;
+          const why = review.verification?.detail ?? review.escalation.trigger;
+          messages.push({
+            role: 'user',
+            content: `That answer did not pass verification: ${why}. Reconsider carefully and provide a corrected, complete final answer.`,
+          });
+          continue;
+        }
+      }
       return finish(result.text, 'stop', 'done');
     }
 

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { ConfigError, loadConfig } from '@glamfire/config';
 import { getVersion } from '../../../scripts/version.mjs';
 import { cmdConfig } from './config.mjs';
+import { cmdRoute } from './route.mjs';
 import { cmdRun } from './run.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -20,6 +21,7 @@ Usage: glam <command> [options]
 
 Commands:
   run "<prompt>"     Run a task against GLM 5.2 on Fireworks (real inference)
+  route "<prompt>"   Show how a task would be routed (offline, no provider call)
   config             Show the resolved, layered, secret-redacted configuration
   version            Print the glamfire version
   doctor             Check the local environment is ready to run glamfire
@@ -92,6 +94,7 @@ async function main(argv) {
   }
   if (first === 'doctor') return cmdDoctor();
   if (first === 'config') return cmdConfig(args.slice(1), { version: VERSION });
+  if (first === 'route') return cmdRoute(args.slice(1), { version: VERSION });
   if (first === 'run') return cmdRun(args.slice(1), { version: VERSION });
   process.stderr.write(`glam: unknown command "${first}"\nRun \`glam help\`.\n`);
   process.exitCode = 2;

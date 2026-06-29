@@ -64,6 +64,9 @@ importers:
       '@glamfire/engine':
         specifier: workspace:*
         version: link:../engine
+      '@glamfire/router':
+        specifier: workspace:*
+        version: link:../router
 
   packages/config:
     dependencies:
@@ -76,7 +79,14 @@ importers:
 
   packages/engine: {}
 
-  packages/router: {}
+  packages/router:
+    dependencies:
+      '@glamfire/config':
+        specifier: workspace:*
+        version: link:../config
+      '@glamfire/engine':
+        specifier: workspace:*
+        version: link:../engine
 
   packages/sdk: {}
 

@@ -135,6 +135,18 @@ every release.)
   self‑contained skill directory (manifest + handlers + neutral instruction + example
   episodes + optional verifier) loads, validates, and **installs into the engine** as
   `{ system, tools }` for any model. Ships a working `code-explainer` example skill.
+- **`@glamfire/router`** + **`glam route`** — center/edge, cost‑aware routing (SPEC §5.3),
+  **fully working offline end‑to‑end**: a pure, feature‑based classifier scores each task
+  **center ↔ edge** with a calibrated, *non‑verbalized* confidence (length, code‑ness,
+  novelty, retrieval‑hit quality, historical outcomes); a declarative **policy engine**
+  evaluates `routing.rules` top‑down (first match wins), filters candidates by
+  adapter‑declared **capabilities** and projected **`maxUsd`**, and picks the **cheapest
+  survivor**; an **escalation cascade** runs the cheap model, **verifies** (rubric /
+  heuristic / pluggable), and **escalates** to the next‑stronger candidate on failure
+  (real `escalation` step, budget‑bounded) — proven end‑to‑end through the **real engine
+  loop**. `glam route "<prompt>"` prints the decision + a **distribution report** ($ saved
+  vs always‑frontier) with **no API key and no provider call**; `glam run --explain` shows
+  the live decision. Wired into the engine via a neutral `RouterHook`.
 - A passing **smoke test** that drives the real CLI the way a human would.
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 
@@ -149,8 +161,10 @@ every release.)
   faked.
 
 **Specified, in active build** (lock‑step, no shims — see [SPEC](SPEC.md))
-- router (center/edge) · team harness · SDK · packaging. (Edge/frontier escalation needs
-  a second adapter to land before the router's cascade is a real, asserted path.)
+- team harness · SDK · packaging. (The router's **cross‑provider** escalation — cheap GLM
+  → frontier — is real and asserted in‑process today; an end‑to‑end *live* cheap→frontier
+  cascade across two providers awaits the second provider adapter + its key. Same‑provider
+  routing and the full cascade machinery are working and tested now.)
 
 If a capability is partial, the docs and this section say so. A feature is **DONE** only
 when a real human end‑user can use it.

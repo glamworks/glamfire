@@ -4,5 +4,22 @@
   "private": true,
   "description": "Center/edge cost-aware routing with confidence-based escalation; GLM 5.2/Fireworks default workhorse (SPEC 5.3).",
   "license": "Apache-2.0",
-  "type": "module"
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc --build tsconfig.json",
+    "typecheck": "tsc --build tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@glamfire/config": "workspace:*",
+    "@glamfire/engine": "workspace:*"
+  }
 }

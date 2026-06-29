@@ -127,6 +127,12 @@ export interface RouteDecisionStep extends BaseStep {
   adapter: string;
   model: string;
   reason: string;
+  /** Center vs edge of distribution, logged when a router made the call (§5.3). */
+  distribution?: 'center' | 'edge';
+  /** Router confidence in the classification, [0,1]. */
+  confidence?: number;
+  /** Edge-ness score, [0,1] (0 = dead center, 1 = far edge). */
+  score?: number;
 }
 
 export interface EscalationStep extends BaseStep {
@@ -272,4 +278,83 @@ export interface StreamingAdapter extends AdapterContract {
   stream(state: RunState, onEvent: (ev: StreamEvent) => void): Promise<ModelTurnResult>;
   /** Non-streaming completion (used when streaming is disabled). */
   complete(state: RunState): Promise<ModelTurnResult>;
+}
+
+// ---------------------------------------------------------------------------
+// Router hook — the cost-aware routing boundary (SPEC §5.3).
+//
+// The engine owns the loop, the budget ceiling, and the permission gate. A
+// router only decides *which* model runs and *whether to escalate* after a
+// final answer. This interface is implemented by `@glamfire/router`; the engine
+// depends on nothing but these types, keeping the contract neutral and the
+// dependency arrow pointing inward (router -> engine, never the reverse).
+// ---------------------------------------------------------------------------
+
+/** A concrete (adapter, runtime-config) pair the engine can run a turn with. */
+export interface AdapterSelection {
+  adapter: StreamingAdapter;
+  config: AdapterRuntimeConfig;
+}
+
+/** The router's pre-call classification of a task (center <-> edge + confidence). */
+export interface RouteClassification {
+  distribution: 'center' | 'edge';
+  /** Edge-ness in [0,1] (0 = dead center, 1 = far edge). */
+  score: number;
+  /** Calibrated confidence in the classification, [0,1]. */
+  confidence: number;
+}
+
+/** The router's initial model choice, logged as a `route_decision` step. */
+export interface RouterSelection extends AdapterSelection {
+  /** Human-readable explanation (which rule matched, why this model won). */
+  reason: string;
+  /** Classification logged on the route_decision step. */
+  classification?: RouteClassification;
+}
+
+/** A verifier verdict the engine records as a `verification` step. */
+export interface VerificationVerdict {
+  passed: boolean;
+  detail: string;
+}
+
+/** The router's decision to escalate to a stronger model after a failed verify. */
+export interface RouterEscalation extends AdapterSelection {
+  /** Model id being escalated from. */
+  from: string;
+  /** Model id being escalated to. */
+  to: string;
+  /** Why the escalation fired (the recorded trigger). */
+  trigger: string;
+}
+
+/** What the router hands back after reviewing a candidate's final answer. */
+export interface RouterReview {
+  /** Verifier verdict to log as a `verification` step (omit to skip logging). */
+  verification?: VerificationVerdict;
+  /** When present, the engine escalates to this selection and continues. */
+  escalation?: RouterEscalation;
+}
+
+/** Read-only context the router consults when reviewing a final answer. */
+export interface RouterReviewInput {
+  task: Task;
+  /** The model's current final answer to verify. */
+  output: string;
+  /** The run so far (cost/usage/steps) — for budget-aware escalation decisions. */
+  run: Run;
+  /** The model id that produced this answer. */
+  currentModel: string;
+}
+
+/**
+ * A pluggable routing brain. The engine calls `select` once at the start of a
+ * run to pick the initial model, then (optionally) `review` after each final
+ * answer to verify and, on failure, escalate. Escalation continues the same
+ * run, so the engine's budget ceiling still bounds the whole cascade.
+ */
+export interface RouterHook {
+  select(task: Task): RouterSelection;
+  review?(input: RouterReviewInput): RouterReview | Promise<RouterReview>;
 }
