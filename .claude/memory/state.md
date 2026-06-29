@@ -4,21 +4,33 @@ Keep this in sync with README → **Current reality**. Update on every release.
 
 **Version**: see `VERSION` (source of truth).
 
+**Toolchain (live on main)**: pnpm workspace, Node ≥22, **strict TS** (tsconfig.base),
+Biome 1.9.4, Vitest 2. `npm run lint` / `npx vitest run` / `pnpm -r build|typecheck` /
+`node scripts/smoke.mjs` all green. Foundation `.mjs` CLI/scripts stay zero-build;
+subsystem packages are TS built to `dist/` (CLI imports built JS). NOTE: two zod majors
+coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; standardize later).
+
 **Works today (verified, real, human-usable)**
-- `glam version` / `--version` — version in output.
-- `glam doctor` — env checks (Node ≥22, FIREWORKS_API_KEY, install).
-- `glam help`.
-- `scripts/smoke.mjs` — drives the real CLI like a human; PASSING.
-- `scripts/version.mjs` / `bump-version.mjs` — version source-of-truth + bump.
-- SPEC.md complete; 22-dimension research base in `research/`; orchestrator framework
-  in `.claude/`.
+- `glam version`/`--version`, `glam doctor`, `glam help`.
+- **`@glamfire/brain`** — sqlite-vec + FTS5 owned store, 4 record types, hybrid
+  retrieval, **export→import invariant tested**. Offline hash embedder default; opt-in
+  on-device transformer (fastembed). Demo: `node packages/brain/examples/demo.mjs`.
+  Fully DONE (no remote dep).
+- `scripts/smoke.mjs` (drives real CLI + `glam run` no-key path); version source-of-truth.
 
-**Specified, not yet built** (build in lock-step, no shims): `@glamfire/engine`,
-`@glamfire/brain`, `@glamfire/router`, `@glamfire/adapters` (fireworks-glm first),
-`@glamfire/skills`, `@glamfire/team`, SDK, server mode, real binaries/packaging, CI
-matrix, team harness surfaces.
+**Built, gates green, NOT yet DONE (live call pending key)**
+- `glam run` + `@glamfire/engine` (plan→act→observe loop, real tools, permission gate,
+  hard budget) + `@glamfire/adapters` `fireworks-glm` (Fireworks OpenAI-compat, streaming
+  tool-call fragment reassembly, pricing). Verified vs real captured GLM wire fixtures +
+  loopback transport through the binary. **Live GLM 5.2 round-trip pending FIREWORKS_API_KEY**
+  — verify with `packages/adapters/MANUAL-VERIFY.md`, then mark DONE + tag a release.
+- Neutral contract lives in `@glamfire/engine` (Task/Run/Step/ToolSpec/AdapterContract).
+  Router replaces the placeholder `route_decision` in `loop.ts`; brain/skills compose into
+  `RunState.system` + register `ToolSpec`s; budget ceilings live only on `Task.budget`.
 
-**Next sensible work** (pull as issues, dispatch to parallel builders): the
-`fireworks-glm` adapter as the first real inference path behind `glam`, then the engine
-loop (handling GLM streaming tool-call fragments), then the brain store (sqlite-vec),
-then the router — each a full-stack mini-feature verified against a real Fireworks call.
+**Specified, not yet built** (lock-step, no shims): `@glamfire/router` (#5),
+`@glamfire/skills` (#6), `@glamfire/team` (#7), layered `@glamfire/config`, SDK, server
+mode, real binaries/packaging (#8), CI matrix.
+
+**Next**: (1) get FIREWORKS_API_KEY → live-verify `glam run` → release 0.1.0. (2) Wave 2
+builders on the engine contract: router, skills, config, team Slack surface, packaging.

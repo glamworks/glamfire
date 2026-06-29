@@ -120,12 +120,27 @@ every release.)
 - `glam version` / `glam --version` — version in the product's output.
 - `glam doctor` — checks the local environment (Node, provider key, install).
 - `glam help` — usage.
+- **`@glamfire/brain`** — the owned context store, **fully working end‑to‑end**:
+  embedded SQLite + `sqlite-vec` + FTS5, four provenance‑bearing record types
+  (Fact/Document/Episode/Pointer), hybrid retrieval (vector + keyword + recency +
+  provenance) with token‑budget packing, and a **tested export→import ownership
+  invariant** (your store round‑trips to human‑readable JSONL and back, bit‑exact).
+  Default embedder is offline/zero‑key; an on‑device transformer backend is opt‑in.
 - A passing **smoke test** that drives the real CLI the way a human would.
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 
+**Built, one step from DONE** (all gates green; the only unverified step is the live call)
+- **`glam run`** + **`@glamfire/engine`** (plan→act→observe loop, real tool dispatch,
+  least‑privilege permission gate, hard token/cost budget) + **`fireworks-glm` adapter**
+  (OpenAI‑compatible Fireworks transport, streaming tool‑call fragment reassembly,
+  pricing). The whole vertical is built and tested against **real captured GLM wire
+  fixtures** and driven through the actual binary over a loopback transport. The **live
+  GLM 5.2 round‑trip is pending a `FIREWORKS_API_KEY`** for human‑standard verification —
+  we do not mark it DONE until a real Fireworks call is observed. No part of the path is
+  faked.
+
 **Specified, in active build** (lock‑step, no shims — see [SPEC](SPEC.md))
-- engine (agent loop) · brain (owned context) · router (center/edge) · adapters
-  (Fireworks/GLM first) · skills · team harness.
+- router (center/edge) · skills · team harness · layered config · packaging.
 
 If a capability is partial, the docs and this section say so. A feature is **DONE** only
 when a real human end‑user can use it.
