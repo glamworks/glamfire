@@ -1,0 +1,17 @@
+# Isolated coin-tooling deps — MUST NOT enter the product workspace/lockfile.
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# NEVER commit a keypair / secret. These hold real money on mainnet.
+*keypair*.json
+*.keypair.json
+*-keypair.json
+id*.json
+*.secret
+*.key
+
+# Scratch / dry-run artifacts
+*.log
+dry-run-*.json

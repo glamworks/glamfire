@@ -1,0 +1,22 @@
+{
+  "name": "@glamworks/meme-coin-tooling",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ISOLATED operator tooling to mint/lock the $GLAM & $GLAMFIRE community tokens. NOT part of the glamfire product workspace — the software never depends on this. STATUS: NOT LIVE.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "mint": "node mint.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@metaplex-foundation/mpl-token-metadata": "^3.4.0",
+    "@metaplex-foundation/umi": "^1.0.0",
+    "@metaplex-foundation/umi-bundle-defaults": "^1.0.0",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.98.0"
+  }
+}
