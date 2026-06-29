@@ -3,8 +3,8 @@
 // Usage: node scripts/bump-version.mjs [major|minor|patch]   (default: patch)
 // Prints the new version. Commit/push/tag is done by the caller (see CLAUDE.md release rule).
 import { readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const kind = (process.argv[2] ?? 'patch').toLowerCase();
@@ -20,9 +20,16 @@ if (!m) {
   process.exit(1);
 }
 let [maj, min, pat] = [Number(m[1]), Number(m[2]), Number(m[3])];
-if (kind === 'major') { maj += 1; min = 0; pat = 0; }
-else if (kind === 'minor') { min += 1; pat = 0; }
-else { pat += 1; }
+if (kind === 'major') {
+  maj += 1;
+  min = 0;
+  pat = 0;
+} else if (kind === 'minor') {
+  min += 1;
+  pat = 0;
+} else {
+  pat += 1;
+}
 const next = `${maj}.${min}.${pat}`;
 
 writeFileSync(join(root, 'VERSION'), `${next}\n`);

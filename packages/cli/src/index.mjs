@@ -3,8 +3,8 @@
 // Foundation build: real, end-to-end commands only (no shims). As subsystems land,
 // run/route/team commands attach here over @glamfire/engine.
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getVersion } from '../../../scripts/version.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');

@@ -23,9 +23,6 @@
       "Bash(gh repo view:*)",
       "Bash(gh label:*)"
     ],
-    "ask": [
-      "Bash(gh repo delete:*)",
-      "Bash(git push --force:*)"
-    ]
+    "ask": ["Bash(gh repo delete:*)", "Bash(git push --force:*)"]
   }
 }

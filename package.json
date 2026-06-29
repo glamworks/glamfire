@@ -15,9 +15,7 @@
   "engines": {
     "node": ">=22"
   },
-  "workspaces": [
-    "packages/*"
-  ],
+  "workspaces": ["packages/*"],
   "scripts": {
     "glam": "node packages/cli/src/index.mjs",
     "version:print": "node scripts/version.mjs",

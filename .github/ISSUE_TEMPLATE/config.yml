@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discussions
+    url: https://github.com/glamworks/glamfire/discussions
+    about: Questions, ideas, and show-and-tell.
+  - name: Security
+    url: https://github.com/glamworks/glamfire/security/advisories/new
+    about: Report a vulnerability privately (do not open a public issue).

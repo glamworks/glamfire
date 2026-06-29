@@ -2,9 +2,9 @@
 // Smoke test: exercise the REAL glam CLI the way a human would (SPEC §10).
 // No mocks. Spawns the actual binary and asserts real output.
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const cli = join(root, 'packages', 'cli', 'src', 'index.mjs');
