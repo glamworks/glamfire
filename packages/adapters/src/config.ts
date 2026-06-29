@@ -1,10 +1,19 @@
-// Provider configuration for the Fireworks GLM adapter, validated with zod.
+// Provider configuration for the Fireworks GLM adapter, resolved *through* the
+// layered @glamfire/config subsystem (SPEC §6) and validated with zod.
 //
-// Resolution order (lowest -> highest precedence): built-in defaults -> env vars
-// -> explicit overrides (e.g. CLI flags). Full layered TOML config
-// (~/.glam/config.toml, ./glam.toml) is the @glamfire/config subsystem's job;
-// this resolves the provider slice the adapter needs, honestly and for real.
+// The adapter needs a flat provider slice (apiKey, baseUrl, model, GLM knobs).
+// That slice is derived from a fully-resolved `GlamConfig` (built-in defaults <
+// ~/.glam/config.toml < ./glam.toml < env, assembled by `loadConfig`), then
+// overlaid with adapter-specific env vars (FIREWORKS_*) and explicit overrides
+// (CLI flags). The API key is resolved from the provider's credential reference
+// (env var or OS keychain) — never inline, never logged.
 
+import {
+  type GlamConfig,
+  builtinDefaults,
+  describeCredentialRef,
+  resolveCredential,
+} from '@glamfire/config';
 import { z } from 'zod';
 
 export const FIREWORKS_DEFAULT_BASE_URL = 'https://api.fireworks.ai/inference/v1';
@@ -24,7 +33,7 @@ export const fireworksConfigSchema = z.object({
 
 export type FireworksConfig = z.infer<typeof fireworksConfigSchema>;
 
-/** Raw overrides (e.g. from CLI flags). Undefined fields fall through to env/defaults. */
+/** Raw overrides (e.g. from CLI flags). Undefined fields fall through to env/config. */
 export interface FireworksOverrides {
   apiKey?: string;
   baseUrl?: string;
@@ -36,6 +45,16 @@ export interface FireworksOverrides {
   seed?: number;
 }
 
+/** Options for {@link resolveFireworksConfig}. */
+export interface ResolveFireworksOptions {
+  /**
+   * A fully-resolved layered config (from `@glamfire/config`'s `loadConfig`).
+   * When omitted, the built-in defaults layer is used, so this function works
+   * with zero config files (and existing call sites keep behaving identically).
+   */
+  config?: GlamConfig;
+}
+
 type EnvLike = Record<string, string | undefined>;
 
 function pick(...vals: (string | undefined)[]): string | undefined {
@@ -44,31 +63,52 @@ function pick(...vals: (string | undefined)[]): string | undefined {
 }
 
 /**
- * Resolve a validated FireworksConfig from environment + overrides. Throws a
- * clear, actionable error if required values are missing or invalid — never
- * silently falls back (SPEC §6).
+ * Resolve a validated FireworksConfig from a layered `GlamConfig` (providers,
+ * run defaults, credential reference) overlaid with adapter-specific env vars
+ * and explicit overrides. Precedence, lowest -> highest:
+ *   config (defaults < user toml < project toml) < FIREWORKS_* env < overrides.
+ *
+ * Throws a clear, actionable error if required values are missing or invalid —
+ * never silently falls back (SPEC §6).
  */
 export function resolveFireworksConfig(
   env: EnvLike,
   overrides: FireworksOverrides = {},
+  options: ResolveFireworksOptions = {},
 ): FireworksConfig {
-  const candidate: Record<string, unknown> = {
-    apiKey: pick(overrides.apiKey, env.FIREWORKS_API_KEY),
-    baseUrl: pick(overrides.baseUrl, env.FIREWORKS_BASE_URL),
-    model: pick(overrides.model, env.FIREWORKS_MODEL),
-    reasoningEffort: overrides.reasoningEffort ?? env.FIREWORKS_REASONING_EFFORT,
-    serviceTier: overrides.serviceTier ?? env.FIREWORKS_SERVICE_TIER,
-  };
-  if (overrides.temperature !== undefined) candidate.temperature = overrides.temperature;
-  else if (env.FIREWORKS_TEMPERATURE !== undefined) {
-    candidate.temperature = Number(env.FIREWORKS_TEMPERATURE);
-  }
-  if (overrides.maxTokens !== undefined) candidate.maxTokens = overrides.maxTokens;
-  if (overrides.seed !== undefined) candidate.seed = overrides.seed;
+  const config = options.config ?? builtinDefaults();
+  const provider = config.providers.fireworks;
+  const run = config.run;
 
-  if (candidate.apiKey === undefined) {
-    throw new Error('FIREWORKS_API_KEY is not set (required to call GLM 5.2 on Fireworks)');
+  // API key: explicit override, else resolve the provider's credential reference
+  // (env var or OS keychain). The reveal() here is the single, legitimate
+  // provider-boundary read; the value never enters logs or the config object.
+  const credential = resolveCredential(provider.credential, env);
+  const apiKey = pick(overrides.apiKey, credential?.reveal());
+  if (apiKey === undefined) {
+    const source = describeCredentialRef(provider.credential);
+    throw new Error(
+      `no Fireworks API key: ${source} is not set (required to call GLM 5.2 on Fireworks)`,
+    );
   }
+
+  const candidate: Record<string, unknown> = {
+    apiKey,
+    baseUrl: pick(overrides.baseUrl, env.FIREWORKS_BASE_URL, provider.baseUrl),
+    model: pick(overrides.model, env.FIREWORKS_MODEL, config.model),
+    reasoningEffort: overrides.reasoningEffort ?? env.FIREWORKS_REASONING_EFFORT ?? run.effort,
+    serviceTier: overrides.serviceTier ?? env.FIREWORKS_SERVICE_TIER ?? run.tier,
+  };
+
+  if (overrides.temperature !== undefined) candidate.temperature = overrides.temperature;
+  else if (env.FIREWORKS_TEMPERATURE !== undefined && env.FIREWORKS_TEMPERATURE !== '') {
+    candidate.temperature = Number(env.FIREWORKS_TEMPERATURE);
+  } else candidate.temperature = run.temperature;
+
+  if (overrides.maxTokens !== undefined) candidate.maxTokens = overrides.maxTokens;
+  else if (run.budget.maxTokens !== undefined) candidate.maxTokens = run.budget.maxTokens;
+
+  if (overrides.seed !== undefined) candidate.seed = overrides.seed;
 
   // Drop undefined so zod defaults apply.
   for (const k of Object.keys(candidate)) {
@@ -78,7 +118,7 @@ export function resolveFireworksConfig(
   const parsed = fireworksConfigSchema.safeParse(candidate);
   if (!parsed.success) {
     const issues = parsed.error.issues.map(
-      (i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`,
+      (i) => `  - ${i.path.map(String).join('.') || '(root)'}: ${i.message}`,
     );
     throw new Error(`invalid Fireworks configuration:\n${issues.join('\n')}`);
   }

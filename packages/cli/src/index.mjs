@@ -5,7 +5,9 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ConfigError, loadConfig } from '@glamfire/config';
 import { getVersion } from '../../../scripts/version.mjs';
+import { cmdConfig } from './config.mjs';
 import { cmdRun } from './run.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -18,6 +20,7 @@ Usage: glam <command> [options]
 
 Commands:
   run "<prompt>"     Run a task against GLM 5.2 on Fireworks (real inference)
+  config             Show the resolved, layered, secret-redacted configuration
   version            Print the glamfire version
   doctor             Check the local environment is ready to run glamfire
   help               Show this help
@@ -43,6 +46,24 @@ function cmdDoctor() {
 
   const fwKey = Boolean(process.env.FIREWORKS_API_KEY);
   checks.push([fwKey, 'FIREWORKS_API_KEY', 'set it to use GLM 5.2 on Fireworks (default model)']);
+
+  // Config-file presence + validity (issue #12). Absent files are fine (built-in
+  // defaults work); an invalid config is a real failure reported here.
+  try {
+    const loaded = loadConfig({ cwd: process.cwd(), env: process.env });
+    const found = [];
+    if (loaded.sources.user) found.push(loaded.sources.user);
+    if (loaded.sources.project) found.push(loaded.sources.project);
+    const label =
+      found.length > 0
+        ? `config: ${found.join(', ')}`
+        : 'config: built-in defaults (no ~/.glam/config.toml or ./glam.toml)';
+    checks.push([true, label, '']);
+  } catch (err) {
+    const msg =
+      err instanceof ConfigError ? err.message.split('\n')[0] : String(err?.message ?? err);
+    checks.push([false, 'config', `invalid configuration — ${msg} (run \`glam config\`)`]);
+  }
 
   let pkgOk = false;
   try {
@@ -70,6 +91,7 @@ async function main(argv) {
     return;
   }
   if (first === 'doctor') return cmdDoctor();
+  if (first === 'config') return cmdConfig(args.slice(1), { version: VERSION });
   if (first === 'run') return cmdRun(args.slice(1), { version: VERSION });
   process.stderr.write(`glam: unknown command "${first}"\nRun \`glam help\`.\n`);
   process.exitCode = 2;

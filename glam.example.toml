@@ -1,0 +1,100 @@
+# glamfire configuration — example project config (./glam.toml).
+#
+# This is the layered, zod-validated config surface specified in SPEC §6. Copy
+# the bits you need into ./glam.toml (project) or ~/.glam/config.toml (user).
+# Precedence, lowest -> highest:
+#   built-in defaults < ~/.glam/config.toml < ./glam.toml < env vars < CLI flags
+#
+# SECRETS ARE NEVER WRITTEN HERE. A provider declares *where* its API key comes
+# from (an env var or the OS keychain); the key value lives in the env/keychain,
+# never in this file, never in logs, never in the brain store (SPEC §8).
+
+# Config schema version (for forward-compatible migrations).
+version = 1
+
+# Headline default model id (provider-qualified). GLM 5.2 on Fireworks is the
+# cheap, excellent workhorse for center-of-distribution work.
+model = "accounts/fireworks/models/glm-5p2"
+
+# ---------------------------------------------------------------------------
+# Providers — base URL, known model ids, and credential *reference* per provider.
+# ---------------------------------------------------------------------------
+[providers.fireworks]
+baseUrl = "https://api.fireworks.ai/inference/v1"
+models = ["accounts/fireworks/models/glm-5p2"]
+# Resolve the key from an environment variable:
+credential = { env = "FIREWORKS_API_KEY" }
+
+[providers.anthropic]
+baseUrl = "https://api.anthropic.com"
+models = ["claude-sonnet-4-5"]
+# Or resolve from the OS keychain (macOS Keychain / libsecret / Windows Cred Mgr):
+credential = { keychain = { service = "glamfire", account = "anthropic" } }
+
+[providers.openai]
+baseUrl = "https://api.openai.com/v1"
+models = ["gpt-5"]
+credential = { env = "OPENAI_API_KEY" }
+
+# Fully local, fully private operation via an OpenAI-compatible server (vLLM/SGLang).
+[providers.local]
+baseUrl = "http://localhost:8000/v1"
+models = []
+# Local servers often need no key; omit `credential` entirely.
+
+# ---------------------------------------------------------------------------
+# Routing policy (declarative) — the @glamfire/router contract (SPEC §5.3).
+# Rules are evaluated top-to-bottom; the first whose conditions match wins. The
+# router then filters that rule's `candidates` (ordered cheapest-first) by the
+# adapter-declared capabilities in `requires` and the budget in `maxUsd`, and
+# picks the cheapest survivor. Condition fields: distribution, minConfidence,
+# maxConfidence, requires, maxUsd.
+# ---------------------------------------------------------------------------
+[routing]
+# Model used when no rule matches.
+default = "accounts/fireworks/models/glm-5p2"
+
+# Center-of-distribution work -> GLM 5.2 on Fireworks (cheap workhorse).
+[[routing.rules]]
+distribution = "center"
+candidates = ["accounts/fireworks/models/glm-5p2"]
+
+# Edge / low-confidence work -> escalate to a frontier model, falling back to GLM.
+[[routing.rules]]
+distribution = "edge"
+maxConfidence = 0.5
+requires = ["tool_calling", "long_context"]
+candidates = ["claude-sonnet-4-5", "accounts/fireworks/models/glm-5p2"]
+
+# ---------------------------------------------------------------------------
+# Permissions — default verdict per privilege class, enforced by the engine, not
+# the model (SPEC §5.1). One of: "allow" | "ask" | "deny". Least-privilege.
+# ---------------------------------------------------------------------------
+[permissions]
+read = "allow"
+write = "ask"
+network = "ask"
+exec = "deny"
+# Optional per-tool-name overrides (highest precedence in the gate):
+# tools = { read_file = "allow", run_command = "deny" }
+
+# ---------------------------------------------------------------------------
+# Sandbox — allowlists the engine enforces for tool execution (SPEC §8).
+# ---------------------------------------------------------------------------
+[sandbox]
+filesystem = ["."]          # paths tools may touch
+network = []                # hosts tools may reach
+command = []                # commands exec tools may run
+
+# ---------------------------------------------------------------------------
+# Run defaults — applied to every run unless overridden by env or CLI flags.
+# ---------------------------------------------------------------------------
+[run]
+effort = "high"             # GLM reasoning effort: "high" | "max"
+tier = "standard"           # Fireworks service tier
+temperature = 0.2
+
+[run.budget]
+maxUsd = 0.5                # hard spend ceiling per run
+maxSteps = 8               # plan->act->observe loop cap
+# maxTokens = 100000

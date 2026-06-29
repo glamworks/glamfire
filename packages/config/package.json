@@ -1,8 +1,25 @@
 {
   "name": "@glamfire/config",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "Layered, zod-validated configuration: providers, routing policy, permissions (SPEC 6).",
   "license": "Apache-2.0",
-  "type": "module"
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "smol-toml": "^1.3.1",
+    "zod": "^4.4.3"
+  }
 }

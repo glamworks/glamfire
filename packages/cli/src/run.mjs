@@ -8,6 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { createFireworksGlmAdapter, resolveFireworksConfig } from '@glamfire/adapters';
+import { ConfigError, loadConfig } from '@glamfire/config';
 import { builtinTools, defaultPolicy, runTask } from '@glamfire/engine';
 
 const DIM = '\x1b[2m';
@@ -128,17 +129,26 @@ export async function cmdRun(argv, { version }) {
 
   const useColor = process.stdout.isTTY === true;
 
-  // Resolve provider config (env + CLI overrides), validated with zod.
+  // Load the layered config (defaults < ~/.glam/config.toml < ./glam.toml < env),
+  // then resolve the Fireworks provider slice through it. CLI flags (overrides)
+  // win over env, which wins over the config files (SPEC §6 precedence).
   let config;
   try {
+    const loaded = loadConfig({ cwd: process.cwd(), env: process.env });
     const overrides = {};
     if (opts.model !== undefined) overrides.model = opts.model;
     if (opts.effort !== undefined) overrides.reasoningEffort = opts.effort;
     if (opts.tier !== undefined) overrides.serviceTier = opts.tier;
     if (opts.temperature !== undefined) overrides.temperature = opts.temperature;
     if (opts.maxTokens !== undefined) overrides.maxTokens = opts.maxTokens;
-    config = resolveFireworksConfig(process.env, overrides);
+    config = resolveFireworksConfig(process.env, overrides, { config: loaded.config });
   } catch (err) {
+    if (err instanceof ConfigError) {
+      process.stderr.write(`glam run: ${err.message}\n`);
+      if (err.file) process.stderr.write(`\nOffending file: ${err.file}\n`);
+      process.exitCode = 1;
+      return;
+    }
     process.stderr.write(`glam run: ${err.message}\n`);
     if (!process.env.FIREWORKS_API_KEY) {
       process.stderr.write(

@@ -2,7 +2,8 @@
 // Smoke test: exercise the REAL glam CLI the way a human would (SPEC §10).
 // No mocks. Spawns the actual binary and asserts real output.
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -50,6 +51,8 @@ check('glam doctor reports the version banner', () => {
   }
   if (!out.includes(`glamfire ${VERSION}`)) throw new Error('doctor banner missing version');
   if (!out.includes('Node.js')) throw new Error('doctor missing Node check');
+  // Config-file presence check (issue #12).
+  if (!out.includes('config')) throw new Error('doctor missing config-file check');
 });
 
 check('unknown command exits non-zero', () => {
@@ -89,6 +92,91 @@ check('glam run without FIREWORKS_API_KEY fails with actionable guidance', () =>
     const text = String(err.stdout ?? '') + String(err.stderr ?? '');
     if (!text.includes('FIREWORKS_API_KEY')) throw new Error('missing key guidance');
   }
+});
+
+// --- glam config: the layered configuration surface (SPEC §6) -----------------
+// Drive the real binary against real temp config files (user + project) and a
+// real env var, then assert precedence, provenance, upward project discovery,
+// and — critically — that no secret leaks into the output (SPEC §8). Hermetic:
+// a temp HOME/cwd, never the developer's real ~/.glam.
+
+function withConfigFixture(fn) {
+  const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-config-'));
+  const home = join(dir, 'home');
+  const projRoot = join(dir, 'proj');
+  const cwd = join(projRoot, 'nested', 'deep');
+  mkdirSync(join(home, '.glam'), { recursive: true });
+  mkdirSync(cwd, { recursive: true });
+  try {
+    return fn({ home, projRoot, cwd });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const baseEnv = (home, extra) => ({
+  PATH: process.env.PATH,
+  HOME: home,
+  USERPROFILE: home,
+  ...extra,
+});
+
+check('glam config resolves layered precedence with provenance and redacts secrets', () => {
+  withConfigFixture(({ home, projRoot, cwd }) => {
+    writeFileSync(
+      join(home, '.glam', 'config.toml'),
+      'model = "user-model"\n[run]\neffort = "max"\n',
+    );
+    writeFileSync(join(projRoot, 'glam.toml'), 'model = "project-model"\n[run]\ntemperature = 0.7\n');
+    const env = baseEnv(home, { GLAM_MODEL: 'env-model', FIREWORKS_API_KEY: 'sk-smoke-SECRET-123' });
+    const out = execFileSync('node', [cli, 'config'], { encoding: 'utf8', cwd, env });
+
+    // Precedence: env (model) > project (temperature) > user (effort) > defaults.
+    if (!/\bmodel\s+=\s+env-model\s+\[env\]/.test(out)) {
+      throw new Error(`model precedence (env) not shown in:\n${out}`);
+    }
+    if (!/\brun\.effort\s+=\s+max\s+\[user\]/.test(out)) throw new Error('run.effort (user) not shown');
+    if (!/\brun\.temperature\s+=\s+0\.7\s+\[project\]/.test(out)) {
+      throw new Error('run.temperature (project) not shown');
+    }
+    // Upward project-config discovery from a nested cwd.
+    if (!out.includes(join(projRoot, 'glam.toml'))) throw new Error('project config path not reported');
+    // Redaction: the secret VALUE must never appear; presence is shown as "set".
+    if (out.includes('sk-smoke-SECRET-123')) throw new Error('SECRET LEAKED into `glam config` output');
+    if (!/fireworks\s+env:FIREWORKS_API_KEY\s+.*set/.test(out)) {
+      throw new Error('fireworks credential not reported as set');
+    }
+  });
+});
+
+check('glam config --json emits valid JSON with secrets redacted', () => {
+  withConfigFixture(({ home }) => {
+    const env = baseEnv(home, { FIREWORKS_API_KEY: 'sk-json-SECRET-456' });
+    const out = execFileSync('node', [cli, 'config', '--json'], { encoding: 'utf8', cwd: home, env });
+    if (out.includes('sk-json-SECRET-456')) throw new Error('SECRET LEAKED into --json output');
+    const parsed = JSON.parse(out);
+    if (parsed.config.model !== 'accounts/fireworks/models/glm-5p2') {
+      throw new Error('unexpected default model in --json');
+    }
+    const fw = parsed.credentials.find((c) => c.provider === 'fireworks');
+    if (!fw || fw.resolved !== true) throw new Error('fireworks credential not resolved in --json');
+  });
+});
+
+check('glam config fails loudly (exit 1) on invalid config', () => {
+  withConfigFixture(({ home, projRoot }) => {
+    writeFileSync(join(projRoot, 'glam.toml'), '[run]\neffort = "turbo"\n');
+    const env = baseEnv(home, {});
+    try {
+      execFileSync('node', [cli, 'config'], { encoding: 'utf8', cwd: projRoot, env });
+      throw new Error('expected non-zero exit');
+    } catch (err) {
+      if (err.status !== 1) throw new Error(`expected exit 1, got ${err.status}`);
+      const text = String(err.stdout ?? '') + String(err.stderr ?? '');
+      if (!text.includes('run.effort')) throw new Error('error missing offending field');
+      if (!text.includes('glam.toml')) throw new Error('error missing offending file');
+    }
+  });
 });
 
 process.stdout.write(`\n${failures === 0 ? 'SMOKE PASS' : `SMOKE FAIL (${failures})`}\n`);

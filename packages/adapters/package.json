@@ -19,6 +19,7 @@
     "typecheck": "tsc --build tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@glamfire/config": "workspace:*",
     "@glamfire/engine": "workspace:*",
     "zod": "^4.4.3"
   }

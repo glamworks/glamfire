@@ -10,6 +10,7 @@
   "files": ["src"],
   "dependencies": {
     "@glamfire/engine": "workspace:*",
-    "@glamfire/adapters": "workspace:*"
+    "@glamfire/adapters": "workspace:*",
+    "@glamfire/config": "workspace:*"
   }
 }

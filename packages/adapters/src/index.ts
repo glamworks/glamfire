@@ -7,6 +7,7 @@ export {
   fireworksConfigSchema,
   type FireworksConfig,
   type FireworksOverrides,
+  type ResolveFireworksOptions,
   resolveFireworksConfig,
 } from './config.js';
 export {
