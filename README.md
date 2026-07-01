@@ -190,22 +190,24 @@ every release.)
   publish **gated on a maintainer secret** (no‑op until added). CI runs the full gates
   (build/typecheck/lint/test/smoke) on **macOS, Windows, Linux** and builds+runs the
   artifacts on macOS+Linux.
+- **`glam run`** + **`@glamfire/engine`** — the agent loop **DONE and live‑verified
+  against real GLM 5.2 on Fireworks**: plan→act→observe, real tool dispatch,
+  least‑privilege permission gate, and a **hard token/cost budget that genuinely stops
+  mid‑task** (each turn's output is capped by the remaining budget and any turn that
+  crosses the ceiling reports `budget_exhausted`, not `done`). Sandboxed tools:
+  `read_file`, `write_file`/`edit_file` (cwd‑scoped, symlink‑escape‑defended,
+  `write`=ask→deny), and `run_command` (no‑shell, allowlisted, `exec`=**deny by default**,
+  opt‑in via `--allow-exec`) — enough to close the dogfood read→edit→run loop; full
+  network‑egress isolation needs an OS sandbox and is noted as a known limit. Paired with
+  the **`fireworks-glm` adapter** (OpenAI‑compatible Fireworks transport, streaming
+  tool‑call fragment reassembly, pricing). **Observed live**, real key, real call:
+  `glam run "…compute (2 + 3) * 4…"` streams GLM‑5.2, dispatches the `calculator` tool,
+  and answers `20` (`status: done`); a `--max-usd 0.001` ceiling truncates output and
+  reports `budget_exhausted`. No part of the path is faked.
 - A passing **smoke test** that drives the real CLI the way a human would.
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 
 **Built, one step from DONE** (all gates green; the only unverified step is the live call)
-- **`glam run`** + **`@glamfire/engine`** (plan→act→observe loop, real tool dispatch,
-  least‑privilege permission gate, hard token/cost budget; sandboxed tools: `read_file`,
-  `write_file`/`edit_file` (cwd‑scoped, symlink‑escape‑defended, `write`=ask→deny), and
-  `run_command` (no‑shell, allowlisted, `exec`=**deny by default**, opt‑in via `--allow-exec`)
-  — enough to close the dogfood read→edit→run loop; full network‑egress isolation needs an
-  OS sandbox and is noted as a known limit) + **`fireworks-glm` adapter**
-  (OpenAI‑compatible Fireworks transport, streaming tool‑call fragment reassembly,
-  pricing). The whole vertical is built and tested against **real captured GLM wire
-  fixtures** and driven through the actual binary over a loopback transport. The **live
-  GLM 5.2 round‑trip is pending a `FIREWORKS_API_KEY`** for human‑standard verification —
-  we do not mark it DONE until a real Fireworks call is observed. No part of the path is
-  faked.
 - **Four tested adapters** behind one conformance suite: **`fireworks-glm`** (GLM 5.2/FP8,
   the default), **`anthropic`** (Claude Messages API — edge/escalation candidate), and
   **`together`** serving **GLM 5.2** *and* **Qwen3‑Coder‑Next** — all built on a shared
@@ -213,10 +215,11 @@ every release.)
   reassembly, per‑model pricing/capabilities). The same **conformance battery** runs against
   every adapter/model (a model is "supported" only when it's green). Honesty caveat: Together
   serves GLM‑5.2 at **FP4** (a real downgrade vs Fireworks **FP8**) and Qwen3‑Coder‑Next via a
-  *dedicated* endpoint — see [`research/23`](research/23-second-model-and-provider.md). Verified
-  against real captured wire fixtures; **live calls pending each provider's key**
-  (`FIREWORKS_API_KEY` / `ANTHROPIC_API_KEY` / `TOGETHER_API_KEY`). The router's cross‑provider
-  escalation (cheap GLM/Qwen → frontier Claude) is real, wired, and cost‑compared today.
+  *dedicated* endpoint — see [`research/23`](research/23-second-model-and-provider.md). **`fireworks-glm`
+  is live‑verified** (see *Works today* above); the other two are verified against real captured
+  wire fixtures with their **live calls pending each provider's key** (`ANTHROPIC_API_KEY` /
+  `TOGETHER_API_KEY`). The router's cross‑provider escalation (cheap GLM/Qwen → frontier Claude)
+  is real, wired, and cost‑compared today.
 - **Cross‑platform install without cloning** (SPEC §7): a self‑contained **`glamfire`** npm
   package (`npm i -g glamfire` → `glam`), single‑file **binaries** for macOS/Windows/Linux
   (arm64+x64, checksummed, sigstore‑signed), and **Homebrew / Scoop / winget** manifests, all

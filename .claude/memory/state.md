@@ -56,12 +56,17 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
   fakes) + `docs/DOGFOODING.md` (staged M0–M5, reversible). M0/M1 ready pending Fireworks key.
 - `scripts/smoke.mjs` (drives real CLI + `glam run`/`glam config`/`glam route`); version source.
 
-**Built, gates green, NOT yet DONE (live call pending key)**
+**DONE — live-verified vs real GLM 5.2 on Fireworks (2026-07-01, v0.1.0)**
 - `glam run` + `@glamfire/engine` (plan→act→observe loop, real tools, permission gate,
-  hard budget) + `@glamfire/adapters` `fireworks-glm` (Fireworks OpenAI-compat, streaming
-  tool-call fragment reassembly, pricing). Verified vs real captured GLM wire fixtures +
-  loopback transport through the binary. **Live GLM 5.2 round-trip pending FIREWORKS_API_KEY**
-  — verify with `packages/adapters/MANUAL-VERIFY.md`, then mark DONE + tag a release.
+  hard budget) + `@glamfire/adapters` `fireworks-glm`. **Real Fireworks call observed**:
+  calculator tool round-trip → `20` (status done), pure text (done), `--max-usd 0.001`
+  → output truncated + `budget_exhausted`. TWO blockers found+fixed via the first live
+  call: (1) internal pricing-tier name `standard` was sent raw as wire `service_tier`
+  (Fireworks accepts only `auto|default|flex|priority`) → HTTP 400; now translated
+  internal→wire (standard omits) in `fireworks-glm.ts` `fireworksWireServiceTier()`.
+  (2) the "hard" budget ceiling did NOT stop a terminal text-only turn (returned `done`
+  past `--max-usd`); `loop.ts` now post-spend-checks every turn + caps each turn's
+  `max_tokens` by remaining budget (`budgetCappedConfig`). See [[gotchas]] service_tier.
 - Neutral contract lives in `@glamfire/engine` (Task/Run/Step/ToolSpec/AdapterContract).
   Router replaces the placeholder `route_decision` in `loop.ts`; brain/skills compose into
   `RunState.system` + register `ToolSpec`s; budget ceilings live only on `Task.budget`.
@@ -89,12 +94,14 @@ endpoint. Build Together adapter anyway (OpenAI-compat, parameterized), document
 **DONE since (all on main, verified, 204 tests)**: Together+Qwen adapter, packaging (#8),
 memecoin prep, engine edit/run tools, dogfood harness. Closed issues: #4 #5 #6 #8 #12 (#10 RFC realized).
 
-**Next (blocked on USER — the headline)**: (1) **FIREWORKS_API_KEY** → live-verify `glam run`
-(use `packages/adapters/MANUAL-VERIFY.md`) → **release 0.1.0** (bump→commit→push→tag per /ship) →
-run dogfood M0/M1 (`scripts/dogfood.mjs`). (2) **Publish**: user adds repo secrets NPM_TOKEN +
-brew/scoop/winget deploy keys + creates glamworks/homebrew-tap + glamworks/scoop-bucket → tag
-v0.1.0 publishes everywhere. Per CLAUDE.md §3 do NOT race more breadth ahead while the core
-inference path is live-unverified.
+**Next (the headline)**: FIREWORKS_API_KEY is LIVE (`~/.config/.env`; `set -a; . ~/.config/.env;
+set +a`). `glam run` live-verified → **v0.1.0 tagged**. NOW: (1) run dogfood M0/M1 via
+`scripts/dogfood.mjs` on a real good-first-issue, gates green, AI commits tagged w/ model id.
+(2) close capability gap w/ worker-built engine tools (code search grep/glob, git ops, subagent
+orchestration) safely extending allowlist. (3) self-hosting CI gate (glamfire-on-glamfire, fail
+loud). (4) flip one dev category to glamfire w/ measured success/cost, Claude Code fallback.
+**Publish (blocked on USER)**: add repo secrets NPM_TOKEN + brew/scoop/winget deploy keys +
+create glamworks/homebrew-tap + glamworks/scoop-bucket → tag publishes everywhere.
 
 **Next (key-independent, lock-step, when ready)**: team Slack surface (#7, live needs Slack token),
 `@glamfire/sdk` (typed API over engine/brain/router/skills), server/daemon mode, Docker. Open
