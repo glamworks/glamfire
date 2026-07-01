@@ -270,6 +270,16 @@ export interface OpenAICompatibleSpec {
   sendReasoningEffort: boolean;
   /** Send `service_tier` (a Fireworks-only knob; absent on Together/DeepInfra). */
   sendServiceTier: boolean;
+  /**
+   * Translate glamfire's INTERNAL service-tier vocabulary (the pricing/CLI
+   * names, e.g. `standard`) into the provider's on-the-wire `service_tier`
+   * value — or `undefined` to OMIT the field entirely. This is the single
+   * chokepoint where the tier reaches the wire, so BOTH the spec default and a
+   * runtime override are translated here: no raw internal name can escape to
+   * the provider. When absent, the tier is sent verbatim (providers whose wire
+   * vocabulary equals ours). Only consulted when `sendServiceTier` is true.
+   */
+  wireServiceTier?: ((tier: string | undefined) => string | undefined) | undefined;
 }
 
 /**
@@ -301,7 +311,11 @@ export class OpenAICompatibleAdapter implements StreamingAdapter {
     }
     if (spec.sendServiceTier) {
       const tier = runtime.serviceTier ?? spec.serviceTier;
-      if (tier !== undefined) body.service_tier = tier;
+      // Translate the internal tier to the provider's wire value at the single
+      // wire chokepoint (or omit it). This covers both the spec default and any
+      // runtime override, so a raw internal name can never reach the provider.
+      const wire = spec.wireServiceTier ? spec.wireServiceTier(tier) : tier;
+      if (wire !== undefined) body.service_tier = wire;
     }
     const maxTokens = runtime.maxTokens ?? spec.maxTokens;
     if (maxTokens !== undefined) body.max_tokens = maxTokens;

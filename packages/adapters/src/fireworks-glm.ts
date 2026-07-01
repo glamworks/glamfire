@@ -47,6 +47,45 @@ const FIREWORKS_GLM_CAPABILITIES: Capabilities = {
   seed: true,
 };
 
+/**
+ * Map glamfire's INTERNAL service-tier vocabulary (`standard | priority | fast |
+ * background` — the names used by the pricing table above and by the CLI/router)
+ * to Fireworks' OpenAI-compatible wire `service_tier` value. Fireworks only
+ * accepts `auto | default | flex | priority`; sending our internal names
+ * verbatim (e.g. the default `standard`) is rejected with HTTP 400. Returning
+ * `undefined` OMITS the field, which selects Fireworks' default cheapest
+ * on-demand tier.
+ *
+ *   standard   -> undefined (omit)  Fireworks' default cheapest on-demand tier
+ *   background  -> "flex"           cheaper / slower
+ *   priority    -> "priority"       premium / faster
+ *   fast        -> "priority"       Fireworks has NO distinct "fast" wire tier;
+ *                                   `priority` is its fastest real tier. Honesty
+ *                                   caveat: our PRICING table still distinguishes
+ *                                   `fast` from `priority` (fast ≈ 2× standard),
+ *                                   but on the wire both request the same
+ *                                   priority-speed tier — `fast` is an alias.
+ *
+ * Any value outside the internal enum returns `undefined` (omit) rather than
+ * forwarding a raw string, so an invalid tier can never reach the wire.
+ */
+export function fireworksWireServiceTier(tier: string | undefined): string | undefined {
+  switch (tier) {
+    case 'standard':
+      return undefined;
+    case 'background':
+      return 'flex';
+    case 'priority':
+      return 'priority';
+    // Fireworks has no distinct "fast" wire tier; priority is its fastest real
+    // tier. Pricing still separates them; on the wire `fast` is a priority alias.
+    case 'fast':
+      return 'priority';
+    default:
+      return undefined;
+  }
+}
+
 function fireworksPricing(tier: FireworksConfig['serviceTier']): (usage: Usage) => number {
   const row = PRICING[tier];
   return (usage: Usage) => {
@@ -87,6 +126,10 @@ export class FireworksGlmAdapter extends OpenAICompatibleAdapter {
       // GLM-5.2 is a thinking model on Fireworks, which also offers service tiers.
       sendReasoningEffort: true,
       sendServiceTier: true,
+      // Translate our internal tier vocabulary to Fireworks' wire values (or
+      // omit) at the shared wire chokepoint, so neither the spec default nor a
+      // runtime --tier override can send an invalid raw name (research/02).
+      wireServiceTier: fireworksWireServiceTier,
     });
   }
 }

@@ -62,6 +62,35 @@ function scriptedAdapter(turns: ModelTurnResult[]): StreamingAdapter {
 
 const baseConfig = { model: 'scripted-1' };
 
+/**
+ * Like `scriptedAdapter`, but records the `maxTokens` the engine put on
+ * `state.config` for each turn — this is exactly what the OpenAI-compatible
+ * adapter forwards as the wire `max_tokens`. Lets the tests assert the
+ * budget-derived per-turn output cap (Part B).
+ */
+function capturingAdapter(
+  turns: ModelTurnResult[],
+  seen: Array<number | undefined>,
+  over: { maxOutputTokens?: number } = {},
+): StreamingAdapter {
+  const base = scriptedAdapter(turns);
+  const record = (state: RunState): void => {
+    seen.push(state.config.maxTokens);
+  };
+  return {
+    ...base,
+    capabilities: { ...base.capabilities, maxOutputTokens: over.maxOutputTokens ?? 1000 },
+    stream: async (state: RunState, onEvent: (ev: StreamEvent) => void) => {
+      record(state);
+      return base.stream(state, onEvent);
+    },
+    complete: async (state: RunState) => {
+      record(state);
+      return base.complete(state);
+    },
+  };
+}
+
 describe('plan -> act -> observe loop', () => {
   it('dispatches a real tool and feeds the result back to the model', async () => {
     const adapter = scriptedAdapter([
@@ -246,6 +275,138 @@ describe('plan -> act -> observe loop', () => {
     const result = run.steps.find((s) => s.type === 'tool_result');
     expect(result?.type === 'tool_result' && result.ok).toBe(false);
     expect(result?.type === 'tool_result' && String(result.result)).toMatch(/unknown tool/);
+  });
+});
+
+// The budget ceiling must be genuinely HARD: honest status on every terminal
+// path, and a per-turn output cap so a single turn cannot blow past the budget.
+// Regression for a live GLM run where `--max-usd 0.001` produced a full essay
+// costing $0.0123 yet still reported `done`.
+describe('hard budget ceiling — honest status + per-turn output cap', () => {
+  it('reports budget_exhausted (not done) when a single terminal turn overspends', async () => {
+    // One text-only final turn, $0.002 at $1/M, against a $0.001 ceiling.
+    const adapter = scriptedAdapter([
+      turn({
+        text: 'here is a full 2000-word essay about routing ...',
+        usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 2000 },
+        finishReason: 'stop',
+      }),
+    ]);
+    const run = await runTask({
+      task: {
+        goal: 'Write a 2000-word essay about routing.',
+        budget: { maxUSD: 0.001, maxSteps: 8 },
+      },
+      adapter,
+      tools: new ToolRegistry(),
+      config: baseConfig,
+      cwd: process.cwd(),
+    });
+    // Previously this path returned `done`; the post-spend check now makes it honest.
+    expect(run.status).toBe('budget_exhausted');
+    const final = run.steps.at(-1);
+    expect(final?.type === 'final' && final.reason).toBe('budget_exhausted');
+    // The best-so-far answer is still preserved on the run.
+    expect(run.output).toContain('essay');
+  });
+
+  it('caps a turn max_tokens by the remaining USD budget and then trips the ceiling', async () => {
+    const seen: Array<number | undefined> = [];
+    const adapter = capturingAdapter(
+      [
+        turn({
+          text: 'truncated',
+          usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 600 },
+          finishReason: 'length',
+        }),
+      ],
+      seen,
+    );
+    const run = await runTask({
+      task: { goal: 'essay', budget: { maxUSD: 0.0005, maxSteps: 8 } },
+      adapter,
+      tools: new ToolRegistry(),
+      config: baseConfig,
+      cwd: process.cwd(),
+    });
+    // outRate is $1/M => $1e-6/token; floor(0.0005 / 1e-6) = 500 output tokens.
+    expect(seen[0]).toBe(500);
+    // 600 output tokens * $1/M = $0.0006 > $0.0005 => honest budget_exhausted.
+    expect(run.status).toBe('budget_exhausted');
+  });
+
+  it('leaves max_tokens uncapped on a comfortable budget and finishes done', async () => {
+    const seen: Array<number | undefined> = [];
+    const adapter = capturingAdapter(
+      [
+        turn({
+          text: 'a full, complete answer',
+          usage: { inputTokens: 100, cachedInputTokens: 0, outputTokens: 400 },
+          finishReason: 'stop',
+        }),
+      ],
+      seen,
+    );
+    const run = await runTask({
+      task: { goal: 'what is glamfire', budget: { maxUSD: 1, maxSteps: 8 } },
+      adapter,
+      tools: new ToolRegistry(),
+      config: baseConfig,
+      cwd: process.cwd(),
+    });
+    // Budget cap (1e6 tokens) is far above the ceiling => config left untouched.
+    expect(seen[0]).toBeUndefined();
+    expect(run.status).toBe('done');
+    expect(run.output).toBe('a full, complete answer');
+  });
+
+  it('never raises a configured max_tokens above its configured value on a large budget', async () => {
+    const seen: Array<number | undefined> = [];
+    const adapter = capturingAdapter(
+      [
+        turn({
+          text: 'ok',
+          usage: { inputTokens: 10, cachedInputTokens: 0, outputTokens: 10 },
+          finishReason: 'stop',
+        }),
+      ],
+      seen,
+      { maxOutputTokens: 5000 },
+    );
+    const run = await runTask({
+      task: { goal: 'x', budget: { maxUSD: 1, maxSteps: 8 } },
+      adapter,
+      tools: new ToolRegistry(),
+      config: { model: 'scripted-1', maxTokens: 800 },
+      cwd: process.cwd(),
+    });
+    // min(configured 800, huge budget cap) = 800 => the configured value stands.
+    expect(seen[0]).toBe(800);
+    expect(run.status).toBe('done');
+  });
+
+  it('caps max_tokens by the remaining token budget when maxTokens is set', async () => {
+    const seen: Array<number | undefined> = [];
+    const adapter = capturingAdapter(
+      [
+        turn({
+          text: 'ok',
+          usage: { inputTokens: 10, cachedInputTokens: 0, outputTokens: 10 },
+          finishReason: 'stop',
+        }),
+      ],
+      seen,
+    );
+    const run = await runTask({
+      task: { goal: 'x', budget: { maxTokens: 300, maxSteps: 8 } },
+      adapter,
+      tools: new ToolRegistry(),
+      config: baseConfig,
+      cwd: process.cwd(),
+    });
+    // Remaining token budget (300) is below the adapter's max output (1000) => cap 300.
+    expect(seen[0]).toBe(300);
+    expect(run.status).toBe('done');
   });
 });
 
