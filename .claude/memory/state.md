@@ -114,14 +114,25 @@ endpoint. Build Together adapter anyway (OpenAI-compat, parameterized), document
 **DONE since (all on main, verified, 204 tests)**: Together+Qwen adapter, packaging (#8),
 memecoin prep, engine edit/run tools, dogfood harness. Closed issues: #4 #5 #6 #8 #12 (#10 RFC realized).
 
-**Next (the headline)**: FIREWORKS_API_KEY is LIVE (`~/.config/.env`; `set -a; . ~/.config/.env;
-set +a`). `glam run` live-verified → **v0.1.0 tagged**. NOW: (1) run dogfood M0/M1 via
-`scripts/dogfood.mjs` on a real good-first-issue, gates green, AI commits tagged w/ model id.
-(2) close capability gap w/ worker-built engine tools (code search grep/glob, git ops, subagent
-orchestration) safely extending allowlist. (3) self-hosting CI gate (glamfire-on-glamfire, fail
-loud). (4) flip one dev category to glamfire w/ measured success/cost, Claude Code fallback.
-**Publish (blocked on USER)**: add repo secrets NPM_TOKEN + brew/scoop/winget deploy keys +
-create glamworks/homebrew-tap + glamworks/scoop-bucket → tag publishes everywhere.
+**HEADLINE — DOGFOODING HANDOFF REACHED (2026-07-01, v0.2.0).** FIREWORKS_API_KEY LIVE
+(`~/.config/.env`; `set -a; . ~/.config/.env; set +a`). All 5 finish-line items DONE:
+(1) `glam run` DONE, live GLM round-trip → v0.1.0 tagged; (2) dogfood M0+M1 proven on real
+good-first-issue #11, AI commits tagged w/ model id; (3) code-search engine tools (grep/glob)
+shipped+live-verified (git ops + subagent orchestration = honest next mini-features, NOT yet
+built); (4) self-hosting CI gate shipped (fail-loud, gated on FIREWORKS_API_KEY secret);
+(5) first category flipped to glamfire = **scoped docs**, measured (~$0.01-0.02/task, review-only
+intervention), Claude Code backstop — recorded in docs/DOGFOODING.md. Stop condition met: a scoped
+glam+GLM task (README nav link) completed end-to-end with only review-time involvement.
+
+**Remaining — BLOCKED ON USER**:
+- **Activate self-hosting CI gate**: add `FIREWORKS_API_KEY` as a repo secret (else it skips).
+- **Publish (registries)**: add repo secrets NPM_TOKEN + brew/scoop/winget deploy keys + create
+  glamworks/homebrew-tap + glamworks/scoop-bucket → tag publishes everywhere.
+- **Memecoin**: stays NOT LIVE until user funds+authorizes.
+
+**Next dev (key-independent, lock-step)**: git-ops + subagent-orchestration engine tools (M3);
+first glamfire-authored PR (M2); team Slack (#7); SDK; server/daemon; Docker. Open issues: #1,
+#7, #13 (+ #10 RFC). Dogfood the remaining engine tools THROUGH glamfire now that flip is proven.
 
 **Next (key-independent, lock-step, when ready)**: team Slack surface (#7, live needs Slack token),
 `@glamfire/sdk` (typed API over engine/brain/router/skills), server/daemon mode, Docker. Open
