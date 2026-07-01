@@ -8,6 +8,8 @@ export {
   ToolRegistry,
   ToolError,
   readFileTool,
+  listFilesTool,
+  searchFilesTool,
   calculatorTool,
   writeFileTool,
   editFileTool,

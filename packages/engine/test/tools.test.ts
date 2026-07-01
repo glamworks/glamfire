@@ -1,19 +1,22 @@
 // Tests for the built-in tools and the permission gate — all real behavior.
 
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   type CommandPolicy,
   ToolError,
   type ToolSpec,
+  builtinTools,
   calculatorTool,
   createRunCommandTool,
   defaultCommandPolicy,
   defaultPolicy,
   editFileTool,
   gate,
+  listFilesTool,
   readFileTool,
+  searchFilesTool,
   writeFileTool,
 } from '@glamfire/engine';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -334,5 +337,174 @@ describe('permission gate (least-privilege defaults)', () => {
   it('lets a per-tool override win over the class default', () => {
     const p = defaultPolicy({ toolOverrides: { 't-exec': 'allow' } });
     expect(gate(p, mk('exec'), {}).admitted).toBe(true);
+  });
+});
+
+// --- code navigation: list_files (glob) + search_files (grep) --------------
+
+type ListResult = { pattern: string; count: number; truncated: boolean; files: string[] };
+type SearchResult = {
+  query: string;
+  regex: boolean;
+  count: number;
+  truncated: boolean;
+  matches: { file: string; line: number; text: string }[];
+};
+
+/** Build a realistic repo tree: real source, plus node_modules/.git/dist noise. */
+function makeTree(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'glamfire-nav-'));
+  mkdirSync(join(dir, 'packages', 'engine', 'src'), { recursive: true });
+  mkdirSync(join(dir, 'packages', 'cli', 'src'), { recursive: true });
+  mkdirSync(join(dir, 'node_modules', 'left-pad'), { recursive: true });
+  mkdirSync(join(dir, '.git'), { recursive: true });
+  mkdirSync(join(dir, 'dist'), { recursive: true });
+  writeFileSync(join(dir, 'README.md'), '# glamfire\nThe harness.\n', 'utf8');
+  writeFileSync(
+    join(dir, 'packages', 'engine', 'src', 'tools.ts'),
+    'export const MAGIC = 42;\nfunction sandboxPath() {}\n',
+    'utf8',
+  );
+  writeFileSync(
+    join(dir, 'packages', 'cli', 'src', 'run.mjs'),
+    'import { MAGIC } from "../engine";\n// TODO: wire tools\n',
+    'utf8',
+  );
+  // Noise that MUST be skipped by both tools.
+  writeFileSync(join(dir, 'node_modules', 'left-pad', 'index.ts'), 'export const MAGIC = 0;\n');
+  writeFileSync(join(dir, '.git', 'config.ts'), 'MAGIC secret\n');
+  writeFileSync(join(dir, 'dist', 'bundle.ts'), 'export const MAGIC = 1;\n');
+  return dir;
+}
+
+describe('list_files tool (glob, cwd sandbox)', () => {
+  let dir: string;
+  beforeAll(() => {
+    dir = makeTree();
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  const list = (pattern: string, maxResults?: number) =>
+    listFilesTool.handler(
+      { pattern, ...(maxResults !== undefined ? { maxResults } : {}) },
+      { cwd: dir },
+    ) as Promise<ListResult>;
+
+  it('matches a recursive glob and skips node_modules/.git/dist', async () => {
+    const out = await list('packages/**/*.ts');
+    expect(out.files).toEqual(['packages/engine/src/tools.ts']);
+    expect(out.truncated).toBe(false);
+    // No noise directory ever leaks through.
+    const all = await list('**/*.ts');
+    expect(all.files).toEqual(['packages/engine/src/tools.ts']);
+  });
+
+  it('matches top-level files with a single-segment glob', async () => {
+    const out = await list('*.md');
+    expect(out.files).toEqual(['README.md']);
+  });
+
+  it('sorts deterministically and honors maxResults with truncation', async () => {
+    const out = await list('**/*', 2);
+    expect(out.files.length).toBe(2);
+    expect(out.truncated).toBe(true);
+    // Deterministic lexicographic order.
+    expect([...out.files]).toEqual([...out.files].sort());
+  });
+
+  it('rejects a pattern escaping the sandbox', async () => {
+    await expect(list('../../etc/*')).rejects.toThrow(/escapes the sandbox/);
+    await expect(list('/etc/*')).rejects.toThrow(/escapes the sandbox/);
+  });
+
+  it('rejects a non-positive maxResults', async () => {
+    await expect(list('*.md', 0)).rejects.toBeInstanceOf(ToolError);
+  });
+});
+
+describe('search_files tool (grep, cwd sandbox)', () => {
+  let dir: string;
+  beforeAll(() => {
+    dir = makeTree();
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  const search = (args: Record<string, unknown>) =>
+    searchFilesTool.handler(args, { cwd: dir }) as Promise<SearchResult>;
+
+  it('finds a literal match with file/line/trimmed-text, skipping noise dirs', async () => {
+    const out = await search({ query: 'sandboxPath' });
+    expect(out.matches).toEqual([
+      { file: 'packages/engine/src/tools.ts', line: 2, text: 'function sandboxPath() {}' },
+    ]);
+    // MAGIC appears in real source AND in node_modules/.git/dist — only real hits.
+    const magic = await search({ query: 'MAGIC' });
+    expect(magic.matches.map((m) => m.file).sort()).toEqual([
+      'packages/cli/src/run.mjs',
+      'packages/engine/src/tools.ts',
+    ]);
+  });
+
+  it('supports a regex query and returns 1-indexed lines', async () => {
+    const out = await search({ query: 'export const \\w+ = \\d+', regex: true });
+    expect(out.matches).toEqual([
+      { file: 'packages/engine/src/tools.ts', line: 1, text: 'export const MAGIC = 42;' },
+    ]);
+  });
+
+  it('limits files with an optional glob pattern', async () => {
+    const out = await search({ query: 'MAGIC', pattern: 'packages/cli/**/*.mjs' });
+    expect(out.matches.map((m) => m.file)).toEqual(['packages/cli/src/run.mjs']);
+  });
+
+  it('caps total matches and reports truncation', async () => {
+    const out = await search({ query: 'MAGIC', maxMatches: 1 });
+    expect(out.count).toBe(1);
+    expect(out.truncated).toBe(true);
+  });
+
+  it('treats an invalid regex as a clean tool error (no crash)', async () => {
+    await expect(search({ query: '(unclosed', regex: true })).rejects.toThrow(/invalid regex/);
+  });
+
+  it('rejects a file-limiting pattern escaping the sandbox', async () => {
+    await expect(search({ query: 'x', pattern: '../../etc/*' })).rejects.toThrow(
+      /escapes the sandbox/,
+    );
+  });
+
+  it('rejects an empty query and a non-positive maxMatches', async () => {
+    await expect(search({ query: '' })).rejects.toBeInstanceOf(ToolError);
+    await expect(search({ query: 'x', maxMatches: -3 })).rejects.toBeInstanceOf(ToolError);
+  });
+});
+
+describe('search_files ignores binary files', () => {
+  let dir: string;
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'glamfire-nav-bin-'));
+    writeFileSync(join(dir, 'text.txt'), 'needle here\n', 'utf8');
+    // A NUL byte makes the file "binary" and it must be skipped.
+    writeFileSync(join(dir, 'blob.bin'), Buffer.from('needle\0needle', 'utf8'));
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('skips NUL-containing files but still finds text matches', async () => {
+    const out = (await searchFilesTool.handler({ query: 'needle' }, { cwd: dir })) as SearchResult;
+    expect(out.matches).toEqual([{ file: 'text.txt', line: 1, text: 'needle here' }]);
+  });
+});
+
+describe('code-navigation tools are wired into builtinTools()', () => {
+  it('registers list_files and search_files as read-permission tools', () => {
+    const reg = builtinTools();
+    const listed = reg.get('list_files');
+    const searched = reg.get('search_files');
+    expect(listed?.permission).toBe('read');
+    expect(searched?.permission).toBe('read');
+    // Read tools are admitted unattended by the default gate (like read_file).
+    const p = defaultPolicy();
+    expect(gate(p, listed as ToolSpec, {}).admitted).toBe(true);
+    expect(gate(p, searched as ToolSpec, {}).admitted).toBe(true);
   });
 });
