@@ -54,7 +54,9 @@ async function importModule(modulePath: string, source: string): Promise<Record<
     // every OS; it's a no-op for already-canonical paths.
     let resolvedPath = modulePath;
     try {
-      resolvedPath = realpathSync(modulePath);
+      // `.native` (libuv) — unlike the JS impl — expands Windows 8.3 short names
+      // (RUNNER~1 -> runneradmin), which is what removes the `%7E` from the URL.
+      resolvedPath = realpathSync.native(modulePath);
     } catch {
       // Fall back to the given path (e.g. it may not exist yet) — the import
       // below then throws the actionable "failed to import" error as before.
