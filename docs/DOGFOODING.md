@@ -73,11 +73,19 @@ and is recorded here.
 
 ## Current status
 
-- **M0**: ready pending a `FIREWORKS_API_KEY` (Stage-0 harness wired; live call is
-  the only missing step).
-- **M1**: edit + run tools **shipped** in `@glamfire/engine` (`write_file`/`edit_file` +
-  `run_command`, behind the least-privilege gate; `glam run --allow-exec --yes` to run the
-  edit loop). The read→edit→run→iterate-to-green cycle is proven through the engine loop
-  offline; now **ready pending a key** for the live model.
+- **M0 — PROVEN (2026-07-01, v0.1.0).** `glam run` read `README.md` against real GLM 5.2
+  on Fireworks and proposed 3 concrete, accurate gaps in *Current reality*
+  (`scripts/dogfood.mjs --stage read`, `status: done`); the dogfood gate (smoke + 216
+  tests) stayed green.
+- **M1 — PROVEN (2026-07-01, v0.1.0).** glamfire closed a real **good first issue**
+  ([#11](https://github.com/glamworks/glamfire/issues/11)) end-to-end: driven by GLM 5.2
+  via `scripts/dogfood.mjs --stage edit`, it authored `docs/QUICKSTART.md` through the
+  `write_file` tool. Human review caught one config-schema error; glamfire **iterated to
+  green** and the resulting `./glam.toml` was verified to load via `glam config` (exit 0),
+  `glam doctor` green on the key, gates green. Commit tagged with the model id
+  (`accounts/fireworks/models/glm-5p2`) — Aider-style provenance. Merged to `main`.
+- **Next (M2+):** open a glamfire-authored **PR** (not just a merged commit); add the
+  **self-hosting CI gate** (glamfire-on-glamfire against a canned task, fail loudly);
+  widen engine tools (code search, git ops) to unlock multi-file autonomy (M3).
 - The transition stays **reversible** — Claude Code remains the backstop until a
   category's gate is genuinely met.

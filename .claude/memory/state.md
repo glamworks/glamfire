@@ -53,7 +53,12 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
   through loop offline. KNOWN LIMIT: no OS-level network-egress isolation in pure Node
   (credential-stripping is the honest partial measure; real isolation = container/namespace).
 - **Dogfood harness**: `scripts/dogfood.mjs` (drives real glam + gates; no key→exit 1, never
-  fakes) + `docs/DOGFOODING.md` (staged M0–M5, reversible). M0/M1 ready pending Fireworks key.
+  fakes) + `docs/DOGFOODING.md` (staged M0–M5, reversible). **M0+M1 PROVEN (2026-07-01, v0.1.0)**
+  live vs GLM 5.2: M0 = glam run read README + proposed 3 real gaps; M1 = glamfire authored
+  `docs/QUICKSTART.md` closing good-first-issue #11 (write_file tool; review caught a config-schema
+  error → iterated to green → `glam config` loads it, doctor green, gates green). Commit tagged
+  w/ model id `accounts/fireworks/models/glm-5p2`. Next dogfood: M2 (glamfire-authored PR) +
+  self-hosting CI gate + wider engine tools (code search/git ops) for M3 autonomy.
 - `scripts/smoke.mjs` (drives real CLI + `glam run`/`glam config`/`glam route`); version source.
 
 **DONE — live-verified vs real GLM 5.2 on Fireworks (2026-07-01, v0.1.0)**
