@@ -99,9 +99,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '9.12.0'
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # Install deps so the SBOM step can read the REAL installed versions of the
+      # bundled third-party runtime deps (zod, smol-toml) rather than hand-typed
+      # ones — the SBOM's whole point is truthfulness. Without this the release
+      # job has no node_modules and `build-sbom.mjs` fails on `Cannot find module`.
+      - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
