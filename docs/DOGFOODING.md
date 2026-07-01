@@ -84,8 +84,31 @@ and is recorded here.
   green** and the resulting `./glam.toml` was verified to load via `glam config` (exit 0),
   `glam doctor` green on the key, gates green. Commit tagged with the model id
   (`accounts/fireworks/models/glm-5p2`) — Aider-style provenance. Merged to `main`.
-- **Next (M2+):** open a glamfire-authored **PR** (not just a merged commit); add the
-  **self-hosting CI gate** (glamfire-on-glamfire against a canned task, fail loudly);
-  widen engine tools (code search, git ops) to unlock multi-file autonomy (M3).
+- **Self-hosting CI gate — SHIPPED (v0.2.0).** `.github/workflows/ci.yml` job
+  `self-hosting` drives glamfire-on-glamfire on every push and asserts the dogfood gate
+  (smoke + tests) stays green, failing loudly otherwise. Gated on the `FIREWORKS_API_KEY`
+  repo secret (present → live GLM 5.2; absent → a clear skip notice, never a fake pass).
+  **To activate in CI, add the `FIREWORKS_API_KEY` repo secret.**
+
+### First category flipped to glamfire (research/22 step 4) — **scoped setup/reference docs**
+
+glamfire is now the **default author for scoped docs edits**, with Claude Code as the
+reversible backstop. Measured over the runs that earned the flip (live GLM 5.2 on
+Fireworks, v0.1.0–0.2.0):
+
+| Task | Tools glamfire used | Human interventions | Cost | Result |
+|---|---|---|---|---|
+| Author `docs/QUICKSTART.md` (issue #11) | `write_file` | 1 (review caught a config-schema error → glamfire iterated to green) | ~$0.021 (2 turns) | merged, `glam config` loads the example, doctor green |
+| Add Quickstart link to README nav | `search_files` + `edit_file` | 0 (review-time only) | $0.0116 | merged, one-line diff exactly as scoped |
+
+**Success criteria met:** gates stayed green, diffs were minimal and correct, and the
+second task completed with **only review-time human involvement** — the research/22
+bar for flipping a category. **Cost/task ≈ $0.01–0.02**, well inside center-of-distribution
+economics. **Reversibility:** Claude Code remains available for any docs task glamfire
+can't yet do; gaps get filed as glamfire issues.
+
+- **Next (M2+):** open a glamfire-authored **PR** (not just a merged commit); widen engine
+  tools with **git ops + subagent orchestration** (code-search shipped in v0.2.0) to unlock
+  multi-file autonomy (M3); expand the flipped set beyond docs as each category is won.
 - The transition stays **reversible** — Claude Code remains the backstop until a
   category's gate is genuinely met.
