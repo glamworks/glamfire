@@ -130,9 +130,17 @@ confirmed green (run 28552478908). Fixed 2 Windows-only blockers to get there: `
 (LF, was failing biome) + `realpathSync.native` in skills loader (8.3 short-name `%7E` URL bug).
 See [[gotchas]].
 
+**npm PUBLISHED (2026-07-01, v0.2.1)**: `glamfire` LIVE on npm (latest 0.2.1, provides `glam`)
+— human-verified via `npm i -g glamfire@0.2.1` from public registry → `glam --version` 0.2.1.
+GitHub Release v0.2.1 = 5 binaries + tarball + SBOM. NPM_TOKEN in ~/.config/.env + repo secret.
+Release-job fix: `pnpm install` before build-sbom.mjs (SBOM reads real dep versions; was failing
+`Cannot find module zod` → skipped publish). Cut a release: bump→commit→push→tag `vX.Y.Z`→push
+tag fires release.yml. GOTCHA: workflow_dispatch checks out main NOT the tag; tag-PUSH is correct.
+
 **Remaining — BLOCKED ON USER**:
-- **Publish (registries)**: add repo secrets NPM_TOKEN + brew/scoop/winget deploy keys + create
-  glamworks/homebrew-tap + glamworks/scoop-bucket → tag publishes everywhere.
+- **brew/scoop/winget publishes**: add repo secrets HOMEBREW_TAP_DEPLOY_KEY + SCOOP_BUCKET_DEPLOY_KEY
+  + WINGET_TOKEN, create repos glamworks/homebrew-tap + glamworks/scoop-bucket → next tag publishes
+  to those too (npm already live; manifests already rendered by CI).
 - **Memecoin**: stays NOT LIVE until user funds+authorizes.
 
 **Next dev (key-independent, lock-step)**: git-ops + subagent-orchestration engine tools (M3);

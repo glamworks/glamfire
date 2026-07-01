@@ -129,15 +129,17 @@ cd glamfire && pnpm install && pnpm -r build
 node packages/cli/src/index.mjs --version
 ```
 
-> **What's wired vs. awaiting secrets.** Building the artifacts, checksums, the SBOM,
-> sigstore signing, and the GitHub Release all run unconditionally on a `v*` tag. The
-> **publishes are gated** so nothing ships until the maintainer adds the credential:
-> `NPM_TOKEN` (npm), `HOMEBREW_TAP_DEPLOY_KEY` (tap repo `glamworks/homebrew-tap`),
-> `SCOOP_BUCKET_DEPLOY_KEY` (bucket repo `glamworks/scoop-bucket`), `WINGET_TOKEN`
-> (winget‑pkgs PR). Until then the `npm i -g glamfire` / `brew` / `scoop` / `winget`
-> lines resolve once the first release is published. Build the artifacts yourself any
-> time: `bun scripts/build-npm.mjs --pack` and `bun scripts/build-binaries.mjs`. A
-> Docker image for the team/server profiles is still specified, not yet built.
+> **What's live vs. awaiting secrets.** **`npm i -g glamfire` is LIVE** — the
+> [`glamfire`](https://www.npmjs.com/package/glamfire) package is published (latest:
+> `0.2.1`), verified by installing it from the public registry and running the installed
+> `glam`. Every `v*` tag builds the artifacts, checksums, the SBOM, sigstore signing, and
+> a GitHub Release (all five single‑file binaries + the tarball are attached to
+> [each release](https://github.com/glamworks/glamfire/releases)). The remaining
+> package‑manager publishes are still **gated on maintainer credentials**:
+> `HOMEBREW_TAP_DEPLOY_KEY` (tap repo `glamworks/homebrew-tap`), `SCOOP_BUCKET_DEPLOY_KEY`
+> (bucket repo `glamworks/scoop-bucket`), `WINGET_TOKEN` (winget‑pkgs PR) — so the `brew` /
+> `scoop` / `winget` lines go live once those repos + secrets exist. A Docker image for the
+> team/server profiles is still specified, not yet built.
 
 ---
 
