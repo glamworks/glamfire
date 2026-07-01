@@ -195,7 +195,9 @@ every release.)
   least‑privilege permission gate, and a **hard token/cost budget that genuinely stops
   mid‑task** (each turn's output is capped by the remaining budget and any turn that
   crosses the ceiling reports `budget_exhausted`, not `done`). Sandboxed tools:
-  `read_file`, `write_file`/`edit_file` (cwd‑scoped, symlink‑escape‑defended,
+  `read_file`, **`list_files` (glob)** and **`search_files` (grep)** for code navigation
+  (both cwd‑scoped, `read`‑permission, reusing the same symlink‑escape guard),
+  `write_file`/`edit_file` (cwd‑scoped, symlink‑escape‑defended,
   `write`=ask→deny), and `run_command` (no‑shell, allowlisted, `exec`=**deny by default**,
   opt‑in via `--allow-exec`) — enough to close the dogfood read→edit→run loop; full
   network‑egress isolation needs an OS sandbox and is noted as a known limit. Paired with
@@ -203,7 +205,16 @@ every release.)
   tool‑call fragment reassembly, pricing). **Observed live**, real key, real call:
   `glam run "…compute (2 + 3) * 4…"` streams GLM‑5.2, dispatches the `calculator` tool,
   and answers `20` (`status: done`); a `--max-usd 0.001` ceiling truncates output and
-  reports `budget_exhausted`. No part of the path is faked.
+  reports `budget_exhausted`. No part of the path is faked. **Live‑verified again** for
+  code navigation: `glam run` drove `search_files` + `list_files` on this repo (both
+  `[allow]`, no approval prompt) to locate a function's definition by `file:line`.
+- **Dogfooding M0+M1 — PROVEN live** (glamfire building glamfire): `glam run` read the
+  repo and proposed real gaps (M0), then **authored a doc closing a real good‑first‑issue**
+  end‑to‑end (M1, [#11](https://github.com/glamworks/glamfire/issues/11)) — driven by GLM 5.2
+  via `scripts/dogfood.mjs`, with a human review catching one defect and glamfire iterating
+  to green. A **self‑hosting CI gate** runs glamfire‑on‑glamfire on every push (gated on the
+  `FIREWORKS_API_KEY` repo secret; skips with a clear notice, never a fake pass). Commits
+  authored by glamfire are tagged with the model id. See [`docs/DOGFOODING.md`](docs/DOGFOODING.md).
 - A passing **smoke test** that drives the real CLI the way a human would.
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 

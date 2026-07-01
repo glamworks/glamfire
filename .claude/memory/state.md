@@ -46,6 +46,21 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
   interactive typed confirm), guard test, finalized spec/runbook/disclaimer. STATUS marker
   `token-status: NOT_LIVE`. Launch needs user: funded keypair, hosted metadata, treasury multisig,
   explicit authorization. NEVER advertise/launch unilaterally.
+- **Engine code-search tools (v0.2.0)** — `list_files` (glob) + `search_files` (grep),
+  both `read`-permission, cwd-scoped, reuse the existing `sandboxPath` symlink-escape guard,
+  skip node_modules/.git/dist, capped results, zero new deps (fs recursion + glob→RegExp).
+  Registered in `builtinTools()`, reachable from `glam run`, dispatch `[allow]` (no --yes).
+  Live-verified vs GLM 5.2 (found budgetExhausted at loop.ts:355). Unlocks M3 navigation.
+  Next tool mini-features: git ops + subagent orchestration (not yet built — honest).
+- **Self-hosting CI gate (v0.2.0)** — `.github/workflows/ci.yml` job `self-hosting` drives
+  `scripts/dogfood.mjs --stage read` (glamfire-on-glamfire) then asserts smoke+tests green;
+  fail-loud. GATED on `FIREWORKS_API_KEY` repo secret (present→live GLM; absent→clear skip
+  notice, never fake pass). Verified locally: exit 0, loop closed, 216 tests. USER must add
+  the repo secret to activate it in CI.
+- **bump-version.mjs fix (v0.2.0)** — v0.1.0 bump wrote package.json via raw JSON.stringify,
+  expanding `workspaces` to multiline (Biome rejects) → lint failure on main. Root-caused:
+  bump script now runs `biome format --write package.json`. GOTCHA: any script writing
+  package.json via JSON.stringify must re-format via Biome or lint breaks.
 - **Engine edit/run tools (dogfood M1)** — `write_file`/`edit_file` (cwd-scoped, lexical +
   symlink-escape defense, `write`=ask→deny) + `run_command` (no-shell spawn, allowlist before
   spawn, `exec`=DENY by default even with asker; opt-in `glam run --allow-exec` → ask, needs
