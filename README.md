@@ -13,7 +13,7 @@
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-informational.svg)](#install)
 [![Default model](https://img.shields.io/badge/default-GLM%205.2%20on%20Fireworks-ff5a1f.svg)](#why-glm-52--fireworks)
 
-[Spec](SPEC.md) · [Architecture](docs/ARCHITECTURE.md) · [Mission](docs/MISSION.md) · [Why we win](docs/WHY-WE-WIN.md) · [Current reality](#current-reality) · [Contribute](CONTRIBUTING.md) · [Site](https://glamworks.github.io)
+[Spec](SPEC.md) · [Quickstart](docs/QUICKSTART.md) · [Architecture](docs/ARCHITECTURE.md) · [Mission](docs/MISSION.md) · [Why we win](docs/WHY-WE-WIN.md) · [Current reality](#current-reality) · [Contribute](CONTRIBUTING.md) · [Site](https://glamworks.github.io)
 
 </div>
 
