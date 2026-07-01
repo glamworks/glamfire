@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import {
   type FireworksConfig,
   createFireworksGlmAdapter,
+  fireworksWireServiceTier,
   parseSSE,
   reduceStream,
   resolveFireworksConfig,
@@ -170,9 +171,11 @@ describe('encodeRequest: neutral -> OpenAI function-call grammar', () => {
       content: '{"result":4}',
     });
 
-    // GLM/Fireworks knobs.
+    // GLM/Fireworks knobs. The default internal tier `standard` maps to
+    // Fireworks' default cheapest on-demand tier, which is the OMISSION of the
+    // wire field — sending the literal `standard` is rejected HTTP 400.
     expect(body.reasoning_effort).toBe('high');
-    expect(body.service_tier).toBe('standard');
+    expect(body).not.toHaveProperty('service_tier');
     expect(body.stream).toBe(true);
     expect(body.stream_options).toEqual({ include_usage: true });
     expect(body.tool_choice).toBe('auto');
@@ -180,6 +183,76 @@ describe('encodeRequest: neutral -> OpenAI function-call grammar', () => {
     const tools = body.tools as Array<Record<string, unknown>>;
     expect(tools[0].type).toBe('function');
     expect((tools[0].function as Record<string, unknown>).name).toBe('calculator');
+  });
+});
+
+describe('service_tier: internal -> Fireworks wire translation', () => {
+  // Fireworks accepts only `auto | default | flex | priority` as the wire
+  // `service_tier`; our internal vocabulary is `standard | priority | fast |
+  // background`. The default `standard` must OMIT the field (Fireworks' default
+  // cheapest on-demand tier) — sending the literal `standard` is HTTP 400.
+  it('maps every internal tier to a valid wire value (or omit)', () => {
+    expect(fireworksWireServiceTier('standard')).toBeUndefined();
+    expect(fireworksWireServiceTier('background')).toBe('flex');
+    expect(fireworksWireServiceTier('priority')).toBe('priority');
+    // `fast` has no distinct wire tier — it aliases the priority-speed tier.
+    expect(fireworksWireServiceTier('fast')).toBe('priority');
+  });
+
+  it('never forwards an invalid internal tier to the wire', () => {
+    // Defense-in-depth: anything outside the enum is omitted, not sent raw.
+    expect(fireworksWireServiceTier('turbo')).toBeUndefined();
+    expect(fireworksWireServiceTier(undefined)).toBeUndefined();
+    expect(fireworksWireServiceTier('')).toBeUndefined();
+  });
+
+  // Drive the mapping through the REAL request body the adapter would send.
+  const minimalState = (tier: FireworksConfig['serviceTier']): RunState => ({
+    system: 'You are glamfire.',
+    task: { goal: 'compute', budget: {} },
+    messages: [{ role: 'user', content: 'hi' }],
+    tools: [],
+    config: {
+      model: 'accounts/fireworks/models/glm-5p2',
+      reasoningEffort: 'high',
+      serviceTier: tier,
+      temperature: 0.2,
+    },
+  });
+
+  const wireTierOf = (tier: FireworksConfig['serviceTier']): unknown => {
+    // Both the spec default (adapter built from config) and the runtime override
+    // (state.config.serviceTier) carry the internal tier; assert the wire body.
+    const adapter = createFireworksGlmAdapter({ ...config, serviceTier: tier });
+    const body = adapter.encodeRequest(minimalState(tier)).body as Record<string, unknown>;
+    return Object.hasOwn(body, 'service_tier') ? body.service_tier : Symbol.for('omitted');
+  };
+
+  const OMITTED = Symbol.for('omitted');
+
+  it('omits service_tier for the default `standard` tier', () => {
+    expect(wireTierOf('standard')).toBe(OMITTED);
+  });
+
+  it('sends `flex` for `background`', () => {
+    expect(wireTierOf('background')).toBe('flex');
+  });
+
+  it('sends `priority` for `priority`', () => {
+    expect(wireTierOf('priority')).toBe('priority');
+  });
+
+  it('sends `priority` for `fast` (alias of the priority-speed wire tier)', () => {
+    expect(wireTierOf('fast')).toBe('priority');
+  });
+
+  it('translates a runtime override that differs from the adapter default', () => {
+    // Adapter built as `standard`, but the per-run runtime config asks for
+    // `background`: the runtime override wins and is translated to `flex`.
+    const adapter = createFireworksGlmAdapter(config); // standard default
+    const state = minimalState('background');
+    const body = adapter.encodeRequest(state).body as Record<string, unknown>;
+    expect(body.service_tier).toBe('flex');
   });
 });
 

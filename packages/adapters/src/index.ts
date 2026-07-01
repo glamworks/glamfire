@@ -22,7 +22,11 @@ export {
   type ResolveFireworksOptions,
   resolveFireworksConfig,
 } from './config.js';
-export { FireworksGlmAdapter, createFireworksGlmAdapter } from './fireworks-glm.js';
+export {
+  FireworksGlmAdapter,
+  createFireworksGlmAdapter,
+  fireworksWireServiceTier,
+} from './fireworks-glm.js';
 export {
   TOGETHER_DEFAULT_BASE_URL,
   TOGETHER_GLM_MODEL,

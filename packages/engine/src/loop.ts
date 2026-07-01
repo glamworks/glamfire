@@ -147,7 +147,13 @@ export async function runTask(opts: RunOptions): Promise<Run> {
       return finish(run.output, 'budget_exhausted', 'budget_exhausted');
     }
 
-    const state: RunState = { system, task, messages, tools: tools.list(), config: activeConfig };
+    // Cap this turn's output tokens by the remaining budget so a single turn
+    // cannot blow past maxUSD/maxTokens (SPEC §5.1 hard ceiling). Derived per
+    // iteration from the (shrinking) remaining budget; never mutates the shared
+    // active config.
+    const turnConfig = budgetCappedConfig(activeConfig, activeAdapter, run, task);
+
+    const state: RunState = { system, task, messages, tools: tools.list(), config: turnConfig };
 
     let result: ModelTurnResult;
     try {
@@ -179,6 +185,15 @@ export async function runTask(opts: RunOptions): Promise<Run> {
       reasoning: result.reasoning,
       toolCalls: result.toolCalls,
     });
+
+    // Post-spend ceiling, enforced on EVERY turn (including a terminal
+    // text-only answer). This is what makes the ceiling honest: a final turn
+    // that pushed cumulative spend over the budget reports `budget_exhausted`,
+    // not `done`. Runs before the terminal branch and the tool-dispatch path,
+    // so it subsumes the per-path checks.
+    if (budgetExhausted(run, task)) {
+      return finish(result.text, 'budget_exhausted', 'budget_exhausted');
+    }
 
     if (result.toolCalls.length === 0) {
       // The model produced a final answer. Offer it to the router for
@@ -220,11 +235,6 @@ export async function runTask(opts: RunOptions): Promise<Run> {
         }
       }
       return finish(result.text, 'stop', 'done');
-    }
-
-    // We just spent tokens; enforce the ceiling before doing any more work.
-    if (budgetExhausted(run, task)) {
-      return finish(result.text, 'budget_exhausted', 'budget_exhausted');
     }
 
     for (const call of result.toolCalls) {
@@ -290,6 +300,56 @@ export async function runTask(opts: RunOptions): Promise<Run> {
       }
     }
   }
+}
+
+/**
+ * Cap a turn's `max_tokens` by the budget still available, so no single turn
+ * can massively overspend before the post-spend ceiling can catch it (SPEC
+ * §5.1). Returns a per-turn config copy — never mutates the shared active
+ * config, so the cap is recomputed against the shrinking budget each iteration.
+ *
+ * The cap only bites when it would fall below the ceiling that would otherwise
+ * apply (the configured `maxTokens`, or the adapter's advertised max output);
+ * with a comfortable budget the config is returned untouched, leaving normal
+ * runs exactly as before.
+ */
+function budgetCappedConfig(
+  config: AdapterRuntimeConfig,
+  adapter: StreamingAdapter,
+  run: Run,
+  task: Task,
+): AdapterRuntimeConfig {
+  const { maxUSD, maxTokens } = task.budget;
+  let cap = Number.POSITIVE_INFINITY;
+
+  if (maxUSD !== undefined) {
+    // $/output-token, derived from the adapter's own pricing (no new API): price
+    // one million output tokens and divide back down.
+    const outRate =
+      adapter.pricing({ inputTokens: 0, cachedInputTokens: 0, outputTokens: 1_000_000 }) /
+      1_000_000;
+    if (outRate > 0) {
+      const remainingUSD = Math.max(0, maxUSD - run.costUSD);
+      cap = Math.min(cap, Math.floor(remainingUSD / outRate));
+    }
+  }
+  if (maxTokens !== undefined) {
+    const remainingTokens = maxTokens - (run.usage.inputTokens + run.usage.outputTokens);
+    cap = Math.min(cap, remainingTokens);
+  }
+
+  // Neither budget dimension is set (or maxUSD with a free model and no token
+  // cap): nothing to cap by.
+  if (!Number.isFinite(cap)) return config;
+
+  // The ceiling the turn would otherwise be bounded by. If the budget cap is at
+  // or above it, the budget does not bite — leave the wire untouched.
+  const ceiling = config.maxTokens ?? adapter.capabilities.maxOutputTokens;
+  if (cap >= ceiling) return config;
+
+  // The budget bites. Send a positive max_tokens (floor of 1) so the model is
+  // truncated and the post-spend check then trips `budget_exhausted`.
+  return { ...config, maxTokens: Math.max(1, cap) };
 }
 
 function budgetExhausted(run: Run, task: Task): boolean {
