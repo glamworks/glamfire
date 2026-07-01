@@ -38,6 +38,49 @@ jobs:
       - name: smoke (real CLI, like a human)
         run: node scripts/smoke.mjs
 
+  # Self-hosting gate (research/22): glamfire drives glamfire on a canned task,
+  # then the dogfood harness asserts the real gates stay green. If glamfire can't
+  # drive a clean loop, this FAILS LOUDLY — never `--skip`. The live model call
+  # needs a provider key, so the gate is *gated on the FIREWORKS_API_KEY repo
+  # secret*: present -> it runs for real; absent -> it prints a clear skip notice
+  # (the same honest-gating pattern as the registry publishes), never a false pass.
+  self-hosting:
+    name: self-hosting (glamfire builds glamfire)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '9.12.0'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: build
+        run: pnpm -r build
+      - name: detect provider key
+        id: key
+        env:
+          FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_API_KEY }}
+        run: |
+          if [ -n "$FIREWORKS_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: dogfood — glamfire reads its own repo and proposes work (live GLM 5.2)
+        if: steps.key.outputs.present == 'true'
+        env:
+          FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_API_KEY }}
+        run: |
+          node scripts/dogfood.mjs --stage read --file README.md \
+            "Read this README's Current reality and name 3 concrete, specific gaps or next steps, each as one line."
+      - name: self-hosting gate skipped (no FIREWORKS_API_KEY secret)
+        if: steps.key.outputs.present != 'true'
+        run: |
+          echo "::notice title=self-hosting gate skipped::Add a FIREWORKS_API_KEY repo secret to enable glamfire-on-glamfire in CI (research/22). The harness never fakes a run, so with no key this gate is skipped rather than faked."
+
   # Verify the distributable artifacts really build and run (issue #8): bun builds
   # the self-contained npm bundle and the host single-file binary, then the actual
   # `glam` is run from each and its version is asserted against VERSION.

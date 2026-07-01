@@ -3,7 +3,15 @@
 // model through its adapter (SPEC §5.1).
 
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import {
+  type Dirent,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { ToolContext, ToolSpec } from './types.js';
 
@@ -427,6 +435,301 @@ export const editFileTool: ToolSpec = {
 };
 
 // ---------------------------------------------------------------------------
+// Code navigation — list_files (glob) + search_files (grep). Both are `read`
+// permission (they only ever read the tree) and share the SAME sandbox guards:
+//   * `sandboxPattern` validates the wildcard-free prefix of a glob through the
+//     exact `sandboxPath` used by read_file/write_file/edit_file, so a pattern
+//     like `../../etc/*` or `/etc/passwd` is rejected before any walk begins.
+//   * `walkFiles` re-validates every candidate through `sandboxPath` and never
+//     descends symlinked directories, so an in-sandbox symlink pointing outside
+//     the root cannot leak paths (same defense as the filesystem write tools).
+// No new dependency: a tiny glob->RegExp translation over an fs walk.
+// ---------------------------------------------------------------------------
+
+/** Per-file byte cap for search — mirrors read_file so one huge file can't OOM. */
+const MAX_SEARCH_BYTES = 256 * 1024;
+
+/** Directory names never traversed (noise / build output / VCS internals). */
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist']);
+
+/**
+ * Translate a glob to an anchored RegExp over forward-slash repo-relative paths.
+ *   `**\/`  -> zero or more path segments   (`packages/**\/*.ts`)
+ *   `**`   -> anything, including slashes
+ *   `*`    -> anything except a slash
+ *   `?`    -> a single non-slash character
+ * All other regex metacharacters are escaped so they match literally.
+ */
+function globToRegExp(glob: string): RegExp {
+  let re = '';
+  let i = 0;
+  while (i < glob.length) {
+    const c = glob[i] as string;
+    if (c === '*') {
+      if (glob[i + 1] === '*') {
+        if (glob[i + 2] === '/') {
+          re += '(?:[^/]*/)*'; // '**/' — zero or more directory segments
+          i += 3;
+        } else {
+          re += '.*'; // '**' — anything, slashes included
+          i += 2;
+        }
+      } else {
+        re += '[^/]*'; // '*' — anything within a segment
+        i += 1;
+      }
+    } else if (c === '?') {
+      re += '[^/]';
+      i += 1;
+    } else if ('.+^${}()|[]\\'.includes(c)) {
+      re += `\\${c}`;
+      i += 1;
+    } else {
+      re += c;
+      i += 1;
+    }
+  }
+  return new RegExp(`^${re}$`);
+}
+
+/**
+ * Validate a glob pattern stays in the sandbox by routing its literal
+ * (wildcard-free) prefix through the shared `sandboxPath` guard. Returns the
+ * pattern unchanged when in-bounds; throws a ToolError when it escapes.
+ */
+function sandboxPattern(rawPattern: unknown, cwd: string): string {
+  if (typeof rawPattern !== 'string' || rawPattern.length === 0) {
+    throw new ToolError('argument "pattern" must be a non-empty string');
+  }
+  if (rawPattern.includes('\0')) {
+    throw new ToolError('pattern must not contain a NUL byte');
+  }
+  const literal: string[] = [];
+  for (const seg of rawPattern.split('/')) {
+    if (/[*?[\]]/.test(seg)) break;
+    literal.push(seg);
+  }
+  const base = literal.join('/');
+  // '' / '.' is the sandbox root itself (allowed); anything else must resolve
+  // inside it — reuse read_file's guard so `../` and absolute escapes are caught.
+  if (base !== '' && base !== '.') sandboxPath(base, cwd);
+  return rawPattern;
+}
+
+/** Validate an optional positive-integer limit, falling back to a default. */
+function limitArg(raw: unknown, fallback: number, name: string): number {
+  if (raw === undefined) return fallback;
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw <= 0) {
+    throw new ToolError(`argument "${name}" must be a positive integer`);
+  }
+  return raw;
+}
+
+/**
+ * Walk the sandbox tree, invoking `onFile` with each regular file's
+ * forward-slash repo-relative path. Skips SKIP_DIRS, re-validates every path
+ * through `sandboxPath`, and never descends symlinked directories (so a symlink
+ * out of the sandbox — or a directory cycle — cannot be followed).
+ */
+function walkFiles(root: string, onFile: (rel: string) => void): void {
+  const stack: string[] = [''];
+  while (stack.length > 0) {
+    const relDir = stack.pop() as string;
+    const absDir = relDir === '' ? root : resolve(root, relDir);
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(absDir, { withFileTypes: true });
+    } catch {
+      continue; // unreadable directory — skip rather than crash the whole walk
+    }
+    for (const ent of entries) {
+      const rel = relDir === '' ? ent.name : `${relDir}/${ent.name}`;
+      if (ent.isDirectory()) {
+        if (!SKIP_DIRS.has(ent.name)) stack.push(rel);
+        continue;
+      }
+      if (ent.isFile()) {
+        try {
+          sandboxPath(rel, root);
+        } catch {
+          continue; // defensive: never surface a path that escapes the sandbox
+        }
+        onFile(rel);
+        continue;
+      }
+      if (ent.isSymbolicLink()) {
+        // Include a symlink only when it resolves to a regular file inside the
+        // sandbox; never traverse into it (avoids escapes and directory cycles).
+        try {
+          const abs = sandboxPath(rel, root);
+          if (statSync(abs).isFile()) onFile(rel);
+        } catch {
+          /* escapes the sandbox or is broken — skip */
+        }
+      }
+    }
+  }
+}
+
+/**
+ * list_files — list repo-relative file paths matching a glob, scoped to the
+ * cwd sandbox. Skips node_modules/.git/dist, sorts deterministically, and caps
+ * the result at `maxResults` (reporting truncation). Classified `read`.
+ */
+export const listFilesTool: ToolSpec = {
+  name: 'list_files',
+  description:
+    'List files in the working directory whose repo-relative path matches a glob ' +
+    '(e.g. "packages/**/*.ts", "*.md"). Skips node_modules, .git, and dist. Results ' +
+    'are sorted; up to maxResults are returned (default 200) with a truncated flag. ' +
+    'The pattern must stay inside the working directory.',
+  permission: 'read',
+  parameters: {
+    type: 'object',
+    properties: {
+      pattern: {
+        type: 'string',
+        description:
+          'Glob to match against repo-relative paths. `*` = within a segment, ' +
+          '`**` = across segments, `?` = one character. E.g. "src/**/*.ts".',
+      },
+      maxResults: {
+        type: 'number',
+        description: 'Maximum number of paths to return (default 200).',
+      },
+    },
+    required: ['pattern'],
+    additionalProperties: false,
+  },
+  handler: async (args: Record<string, unknown>, ctx: ToolContext) => {
+    const pattern = sandboxPattern(args.pattern, ctx.cwd);
+    const maxResults = limitArg(args.maxResults, 200, 'maxResults');
+    const root = resolve(ctx.cwd);
+    const re = globToRegExp(pattern);
+    const all: string[] = [];
+    walkFiles(root, (rel) => {
+      if (re.test(rel)) all.push(rel);
+    });
+    all.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    const truncated = all.length > maxResults;
+    const files = truncated ? all.slice(0, maxResults) : all;
+    return { pattern, count: files.length, truncated, files };
+  },
+};
+
+/**
+ * search_files — grep the sandbox tree for a literal or regex query, returning
+ * `{ file, line, text }` matches (repo-relative path, 1-indexed line, trimmed
+ * text). Skips node_modules/.git/dist and binary files, honors an optional glob
+ * to limit files, applies read_file's per-file byte cap, treats an invalid
+ * regex as a clean tool error, and caps total matches. Classified `read`.
+ */
+export const searchFilesTool: ToolSpec = {
+  name: 'search_files',
+  description:
+    'Search files in the working directory for a query and return matching lines as ' +
+    '{ file, line, text }. `query` is a literal substring by default, or a regular ' +
+    'expression when `regex` is true. Optionally limit files with a `pattern` glob ' +
+    '(e.g. "src/**/*.ts"). Skips node_modules, .git, dist, and binary files. Returns ' +
+    'up to maxMatches (default 100) with a truncated flag.',
+  permission: 'read',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'Text to find (literal substring, or a regex when regex=true).',
+      },
+      pattern: {
+        type: 'string',
+        description: 'Optional glob limiting which files are searched (default: all).',
+      },
+      maxMatches: {
+        type: 'number',
+        description: 'Maximum number of matching lines to return (default 100).',
+      },
+      regex: {
+        type: 'boolean',
+        description: 'Treat query as a regular expression instead of a literal (default false).',
+      },
+    },
+    required: ['query'],
+    additionalProperties: false,
+  },
+  handler: async (args: Record<string, unknown>, ctx: ToolContext) => {
+    const query = args.query;
+    if (typeof query !== 'string' || query.length === 0) {
+      throw new ToolError('argument "query" must be a non-empty string');
+    }
+    if (args.regex !== undefined && typeof args.regex !== 'boolean') {
+      throw new ToolError('argument "regex" must be a boolean');
+    }
+    const useRegex = args.regex === true;
+    const maxMatches = limitArg(args.maxMatches, 100, 'maxMatches');
+    const root = resolve(ctx.cwd);
+
+    let fileRe: RegExp | null = null;
+    if (args.pattern !== undefined) {
+      fileRe = globToRegExp(sandboxPattern(args.pattern, ctx.cwd));
+    }
+
+    let matches: (line: string) => boolean;
+    if (useRegex) {
+      let compiled: RegExp;
+      try {
+        compiled = new RegExp(query);
+      } catch (err) {
+        // Invalid pattern is a recoverable tool error, never a crash.
+        throw new ToolError(`invalid regex: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      matches = (line) => compiled.test(line);
+    } else {
+      matches = (line) => line.includes(query);
+    }
+
+    const candidates: string[] = [];
+    walkFiles(root, (rel) => {
+      if (fileRe === null || fileRe.test(rel)) candidates.push(rel);
+    });
+    candidates.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
+    const hits: { file: string; line: number; text: string }[] = [];
+    let truncated = false;
+    for (const rel of candidates) {
+      if (truncated) break;
+      const abs = resolve(root, rel);
+      let stat: ReturnType<typeof statSync>;
+      try {
+        stat = statSync(abs);
+      } catch {
+        continue;
+      }
+      // Per-file byte cap (read_file's limit) bounds memory + regex input.
+      if (!stat.isFile() || stat.size > MAX_SEARCH_BYTES) continue;
+      let content: string;
+      try {
+        content = readFileSync(abs, 'utf8');
+      } catch {
+        continue;
+      }
+      if (content.includes('\0')) continue; // treat NUL-containing files as binary
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i += 1) {
+        const line = lines[i] as string;
+        if (matches(line)) {
+          if (hits.length >= maxMatches) {
+            truncated = true;
+            break;
+          }
+          hits.push({ file: rel, line: i + 1, text: line.trim() });
+        }
+      }
+    }
+    return { query, regex: useRegex, count: hits.length, truncated, matches: hits };
+  },
+};
+
+// ---------------------------------------------------------------------------
 // run_command — execute an allowlisted program under a sandbox policy. This is
 // the highest-risk tool, so it is defense-in-depth:
 //   * Classified `exec` -> denied by default at the permission gate (loop.ts);
@@ -657,6 +960,8 @@ export const runCommandTool: ToolSpec = createRunCommandTool();
 export function builtinTools(opts?: { command?: Partial<CommandPolicy> }): ToolRegistry {
   return new ToolRegistry()
     .register(readFileTool)
+    .register(listFilesTool)
+    .register(searchFilesTool)
     .register(calculatorTool)
     .register(writeFileTool)
     .register(editFileTool)

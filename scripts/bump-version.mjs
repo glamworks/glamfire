@@ -2,6 +2,7 @@
 // Bump semver INCLUDING the patch (third) number, keep VERSION + package.json in sync.
 // Usage: node scripts/bump-version.mjs [major|minor|patch]   (default: patch)
 // Prints the new version. Commit/push/tag is done by the caller (see CLAUDE.md release rule).
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,5 +38,17 @@ const pkgPath = join(root, 'package.json');
 const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
 pkg.version = next;
 writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+
+// `JSON.stringify` expands arrays (e.g. `workspaces`) in a shape Biome's
+// formatter rejects, which would push a lint failure with every release. Hand
+// the file to Biome so the bump output is always gate-clean. Best-effort: if
+// Biome isn't available the bump still succeeds (the caller runs the gates).
+try {
+  execFileSync('npx', ['biome', 'format', '--write', pkgPath], { cwd: root, stdio: 'ignore' });
+} catch {
+  console.error(
+    'bump-version: warning — could not run `biome format` on package.json; run `npm run lint` before releasing.',
+  );
+}
 
 process.stdout.write(`${next}\n`);
