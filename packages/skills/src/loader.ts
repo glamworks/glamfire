@@ -4,6 +4,7 @@
 // `LoadedSkill` objects. A skill directory is fully portable — nothing here
 // depends on this package being built; the skill's module is imported directly.
 
+import { realpathSync } from 'node:fs';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -46,7 +47,19 @@ async function fileExists(p: string): Promise<boolean> {
 async function importModule(modulePath: string, source: string): Promise<Record<string, unknown>> {
   let mod: unknown;
   try {
-    mod = await import(pathToFileURL(modulePath).href);
+    // Canonicalize first: on Windows a temp path can carry an 8.3 short name
+    // (e.g. `RUNNER~1`), whose `~` becomes `%7E` in the file URL and fails to
+    // resolve under Vite's loader (`Failed to load url C:/…/skill.mjs`).
+    // `realpathSync` expands it to the real long path so the URL resolves on
+    // every OS; it's a no-op for already-canonical paths.
+    let resolvedPath = modulePath;
+    try {
+      resolvedPath = realpathSync(modulePath);
+    } catch {
+      // Fall back to the given path (e.g. it may not exist yet) — the import
+      // below then throws the actionable "failed to import" error as before.
+    }
+    mod = await import(pathToFileURL(resolvedPath).href);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new SkillManifestError(`failed to import skill module "${modulePath}": ${msg}`, source);
