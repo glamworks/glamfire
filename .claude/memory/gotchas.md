@@ -28,3 +28,14 @@ them the hard way.
   verify against the actual repo LICENSE before asserting (research/01).
 - **Confidence signal**: probe/perplexity-based confidence beats verbalized
   ("how sure are you?") confidence for routing/escalation (research/04).
+- **Windows CI cross-platform traps (fixed 2026-07-01, all green on win/mac/linux):**
+  (1) No `.gitattributes` → Windows checks out CRLF → `biome check` fails (LF formatter).
+  Fix: `.gitattributes` with `* text=auto eol=lf`. (2) Dynamic `import()` of a runtime
+  file whose path holds a Windows 8.3 short name (`RUNNER~1` in the temp dir) → `~`
+  becomes `%7E` in the file URL → Vite's loader in vitest fails (`Failed to load url
+  C:/…/skill.mjs`). Fix: `realpathSync.native(path)` before `pathToFileURL` — the JS
+  `realpathSync` does NOT expand 8.3 names, only `.native` (libuv) does. (3) `new Function
+  ('u','return import(u)')` for a "native" import throws `A dynamic import callback was not
+  specified` in Node — don't use it. `scripts/bump-version.mjs` writing package.json via
+  raw `JSON.stringify` expands `workspaces` to multiline which Biome rejects → bump script
+  now runs `biome format` on it.

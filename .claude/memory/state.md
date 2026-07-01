@@ -124,8 +124,13 @@ built); (4) self-hosting CI gate shipped (fail-loud, gated on FIREWORKS_API_KEY 
 intervention), Claude Code backstop — recorded in docs/DOGFOODING.md. Stop condition met: a scoped
 glam+GLM task (README nav link) completed end-to-end with only review-time involvement.
 
+**CI FULLY GREEN (2026-07-01)** on macOS+Linux+Windows + the live self-hosting gate. User
+added `FIREWORKS_API_KEY` repo secret → self-hosting gate runs live GLM in CI (not skipped),
+confirmed green (run 28552478908). Fixed 2 Windows-only blockers to get there: `.gitattributes`
+(LF, was failing biome) + `realpathSync.native` in skills loader (8.3 short-name `%7E` URL bug).
+See [[gotchas]].
+
 **Remaining — BLOCKED ON USER**:
-- **Activate self-hosting CI gate**: add `FIREWORKS_API_KEY` as a repo secret (else it skips).
 - **Publish (registries)**: add repo secrets NPM_TOKEN + brew/scoop/winget deploy keys + create
   glamworks/homebrew-tap + glamworks/scoop-bucket → tag publishes everywhere.
 - **Memecoin**: stays NOT LIVE until user funds+authorizes.
