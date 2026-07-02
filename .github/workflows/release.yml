@@ -187,25 +187,13 @@ jobs:
           SCOOP_BUCKET_DEPLOY_KEY: ${{ secrets.SCOOP_BUCKET_DEPLOY_KEY }}
         if: ${{ env.SCOOP_BUCKET_DEPLOY_KEY != '' }}
         run: bash scripts/publish-manifest.sh scoop "$SCOOP_BUCKET_DEPLOY_KEY"
-      - name: set up .NET for wingetcreate
-        env:
-          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
-        if: ${{ env.WINGET_TOKEN != '' }}
-        uses: actions/setup-dotnet@v4
+      # winget's submitter (wingetcreate) is Windows-only, so the rendered manifests
+      # are handed to a dedicated windows job below via this artifact.
+      - name: upload winget manifests for the windows submit job
+        uses: actions/upload-artifact@v4
         with:
-          dotnet-version: '8.0'
-      - name: install wingetcreate (.NET global tool)
-        env:
-          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
-        if: ${{ env.WINGET_TOKEN != '' }}
-        run: |
-          dotnet tool install --global Microsoft.WingetCreate
-          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
-      - name: submit winget manifest (opens a PR to microsoft/winget-pkgs)
-        env:
-          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
-        if: ${{ env.WINGET_TOKEN != '' }}
-        run: bash scripts/publish-manifest.sh winget "$WINGET_TOKEN"
+          name: winget-manifests
+          path: dist/manifests/winget
       - name: package-manager publish summary
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -222,3 +210,31 @@ jobs:
             echo "- scoop: $(status "$SCOOP_BUCKET_DEPLOY_KEY" SCOOP_BUCKET_DEPLOY_KEY)"
             echo "- winget: $(status "$WINGET_TOKEN" WINGET_TOKEN)"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # winget's submitter (wingetcreate) is a Windows-only tool, so it gets its own
+  # windows job. It consumes the manifests rendered by the release job and opens a
+  # community-reviewed PR to microsoft/winget-pkgs. No-ops cleanly without a token.
+  winget:
+    name: winget submit
+    needs: [release]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: winget-manifests
+          path: winget-manifests
+      - name: install wingetcreate
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        if: ${{ env.WINGET_TOKEN != '' }}
+        run: choco install wingetcreate -y --no-progress
+      - name: submit to winget-pkgs (opens a community-reviewed PR)
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        if: ${{ env.WINGET_TOKEN != '' }}
+        run: wingetcreate submit --token $env:WINGET_TOKEN winget-manifests
+      - name: winget skipped (no WINGET_TOKEN)
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        if: ${{ env.WINGET_TOKEN == '' }}
+        run: echo "winget skipped — add a WINGET_TOKEN secret to submit."
