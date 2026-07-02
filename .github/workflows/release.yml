@@ -187,7 +187,21 @@ jobs:
           SCOOP_BUCKET_DEPLOY_KEY: ${{ secrets.SCOOP_BUCKET_DEPLOY_KEY }}
         if: ${{ env.SCOOP_BUCKET_DEPLOY_KEY != '' }}
         run: bash scripts/publish-manifest.sh scoop "$SCOOP_BUCKET_DEPLOY_KEY"
-      - name: submit winget manifest
+      - name: set up .NET for wingetcreate
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        if: ${{ env.WINGET_TOKEN != '' }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+      - name: install wingetcreate (.NET global tool)
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        if: ${{ env.WINGET_TOKEN != '' }}
+        run: |
+          dotnet tool install --global Microsoft.WingetCreate
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+      - name: submit winget manifest (opens a PR to microsoft/winget-pkgs)
         env:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
         if: ${{ env.WINGET_TOKEN != '' }}
