@@ -950,6 +950,269 @@ export function createRunCommandTool(overrides?: Partial<CommandPolicy>): ToolSp
 /** A standalone `run_command` tool with the default sandbox policy. */
 export const runCommandTool: ToolSpec = createRunCommandTool();
 
+// ---------------------------------------------------------------------------
+// Read-only git inspection tools — let a run SEE repository state (status/diff/
+// log/show) without any ability to mutate it. Classified `read`: they dispatch
+// unattended under the default gate, exactly like read_file/search_files. They
+// reuse run_command's spawn discipline via `execInSandbox`:
+//   * No shell (shell:false) — git args are a FIXED array, never string-built;
+//     model-supplied values (pathspec/ref) are validated and passed after `--`
+//     so they can never become git options (option injection).
+//   * cwd-scoped to the run's sandbox root, a hard 10s timeout, output capped at
+//     maxBytes (truncation reported), and a credential-stripped child env
+//     (allowNetwork:false, so GITHUB_TOKEN/*_API_KEY/NPM_TOKEN/… are removed).
+//   * A non-zero git exit (e.g. "not a git repository") becomes a clean
+//     ToolError carrying git's stderr — never a crash.
+// There is intentionally NO add/commit/push/checkout/reset here: write-git stays
+// out of scope (the human owns mutating the repo, per project rules).
+// ---------------------------------------------------------------------------
+
+const GIT_TIMEOUT_MS = 10_000;
+const GIT_DEFAULT_MAX_BYTES = 64 * 1024; // diff/show payload cap
+const GIT_STATUS_MAX_BYTES = 256 * 1024; // status/log lists are small but bounded
+/** Refs may only contain git-safe ref characters; no leading dash, no `..`. */
+const GIT_REF_RE = /^[\w./~^@{}-]+$/;
+
+/**
+ * Spawn `git <argv>` under run_command's sandbox discipline and capture output.
+ * Reuses `execInSandbox` (shell:false, credential-stripped env, timeout, output
+ * cap). Throws a ToolError on spawn failure, timeout, or non-zero exit.
+ */
+async function runGitCapture(
+  argv: string[],
+  opts: { cwd: string; maxBytes: number },
+): Promise<{ stdout: string; truncated: boolean }> {
+  const policy: CommandPolicy = {
+    allowlist: ['git'],
+    timeoutMs: GIT_TIMEOUT_MS,
+    maxOutputBytes: opts.maxBytes,
+    allowNetwork: false, // strip credential-shaped env vars from the git child
+  };
+  let outcome: CommandOutcome;
+  try {
+    outcome = await execInSandbox('git', argv, policy, resolve(opts.cwd));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new ToolError(`failed to run git: ${msg}`);
+  }
+  if (outcome.timedOut) {
+    throw new ToolError(`git ${argv[0]} timed out after ${GIT_TIMEOUT_MS}ms`);
+  }
+  if (outcome.exitCode !== 0) {
+    const detail = (outcome.stderr || outcome.stdout).trim() || `exit code ${outcome.exitCode}`;
+    throw new ToolError(`git ${argv[0]} failed: ${detail}`);
+  }
+  return { stdout: outcome.stdout, truncated: outcome.truncated };
+}
+
+/** Validate an optional untrusted pathspec: no `..`, no leading `-`, no NUL. */
+function validatePathspec(raw: unknown): string {
+  if (typeof raw !== 'string' || raw.length === 0) {
+    throw new ToolError('argument "pathspec" must be a non-empty string');
+  }
+  if (raw.includes('\0')) {
+    throw new ToolError('pathspec must not contain a NUL byte');
+  }
+  if (raw.includes('..')) {
+    throw new ToolError('pathspec must not contain ".." (path traversal)');
+  }
+  if (raw.startsWith('-')) {
+    throw new ToolError('pathspec must not start with "-" (option injection)');
+  }
+  return raw;
+}
+
+/** Validate a required untrusted ref against a strict safe pattern. */
+function validateRef(raw: unknown): string {
+  if (typeof raw !== 'string' || raw.length === 0) {
+    throw new ToolError('argument "ref" must be a non-empty string');
+  }
+  if (raw.startsWith('-')) {
+    throw new ToolError('ref must not start with "-" (option injection)');
+  }
+  if (raw.includes('..')) {
+    throw new ToolError('ref must not contain ".." (range/traversal not allowed)');
+  }
+  if (!GIT_REF_RE.test(raw)) {
+    throw new ToolError('ref contains invalid characters');
+  }
+  return raw;
+}
+
+/**
+ * git_status — porcelain repository status. Returns the current branch, the list
+ * of changed paths ({ status, path }), and whether the tree is clean.
+ */
+export const gitStatusTool: ToolSpec = {
+  name: 'git_status',
+  description:
+    'Show the working-tree status of the git repository (like `git status`). Returns ' +
+    'the current branch, a list of changed { status, path } entries (two-letter ' +
+    'porcelain status codes), and a `clean` flag. Optionally limit to a pathspec. ' +
+    'Read-only: never mutates the repository.',
+  permission: 'read',
+  parameters: {
+    type: 'object',
+    properties: {
+      pathspec: {
+        type: 'string',
+        description: 'Optional path/glob to limit the status to (relative to the repo).',
+      },
+    },
+    additionalProperties: false,
+  },
+  handler: async (args: Record<string, unknown>, ctx: ToolContext) => {
+    const argv = ['status', '--porcelain=v1', '--branch'];
+    if (args.pathspec !== undefined) argv.push('--', validatePathspec(args.pathspec));
+    const { stdout } = await runGitCapture(argv, { cwd: ctx.cwd, maxBytes: GIT_STATUS_MAX_BYTES });
+    const lines = stdout.split('\n').filter((l) => l.length > 0);
+    let branch = '';
+    const changes: { status: string; path: string }[] = [];
+    for (const line of lines) {
+      if (line.startsWith('## ')) {
+        branch = parseBranchLine(line.slice(3));
+        continue;
+      }
+      // Porcelain v1 entry: two status chars, a space, then the path.
+      changes.push({ status: line.slice(0, 2), path: line.slice(3) });
+    }
+    return { branch, changes, clean: changes.length === 0 };
+  },
+};
+
+/** Extract the local branch name from a porcelain `--branch` header body. */
+function parseBranchLine(body: string): string {
+  // Forms: "main", "main...origin/main [ahead 1]", "No commits yet on main",
+  //        "HEAD (no branch)".
+  const noCommits = 'No commits yet on ';
+  if (body.startsWith(noCommits)) return body.slice(noCommits.length).trim();
+  // Strip the "...upstream" tracking suffix and any " [ahead/behind]" annotation.
+  const beforeTracking = body.split('...')[0] as string;
+  return (beforeTracking.split(' ')[0] as string).trim();
+}
+
+/**
+ * git_diff — unified diff of unstaged (or staged) changes, capped at maxBytes.
+ */
+export const gitDiffTool: ToolSpec = {
+  name: 'git_diff',
+  description:
+    'Show a unified diff of changes in the git repository (like `git diff`). By default ' +
+    'shows unstaged changes; set staged=true for the staged (index) diff. Optionally ' +
+    'limit to a pathspec. Output is capped at maxBytes (default 64 KiB) with a ' +
+    '`truncated` flag. Read-only: never mutates the repository.',
+  permission: 'read',
+  parameters: {
+    type: 'object',
+    properties: {
+      staged: {
+        type: 'boolean',
+        description: 'Diff the staged/index changes instead of unstaged (default false).',
+      },
+      pathspec: {
+        type: 'string',
+        description: 'Optional path/glob to limit the diff to (relative to the repo).',
+      },
+      maxBytes: {
+        type: 'number',
+        description: 'Maximum diff bytes to return (default 65536).',
+      },
+    },
+    additionalProperties: false,
+  },
+  handler: async (args: Record<string, unknown>, ctx: ToolContext) => {
+    if (args.staged !== undefined && typeof args.staged !== 'boolean') {
+      throw new ToolError('argument "staged" must be a boolean');
+    }
+    const maxBytes = limitArg(args.maxBytes, GIT_DEFAULT_MAX_BYTES, 'maxBytes');
+    const argv = ['diff'];
+    if (args.staged === true) argv.push('--staged');
+    if (args.pathspec !== undefined) argv.push('--', validatePathspec(args.pathspec));
+    const { stdout, truncated } = await runGitCapture(argv, { cwd: ctx.cwd, maxBytes });
+    return { diff: stdout, truncated };
+  },
+};
+
+/**
+ * git_log — recent commit summaries ({ hash, subject }), newest first.
+ */
+export const gitLogTool: ToolSpec = {
+  name: 'git_log',
+  description:
+    'List recent commits in the git repository (like `git log --oneline`), newest first. ' +
+    'Returns up to maxCount { hash, subject } entries (default 20). Optionally limit to a ' +
+    'pathspec. Read-only: never mutates the repository.',
+  permission: 'read',
+  parameters: {
+    type: 'object',
+    properties: {
+      maxCount: {
+        type: 'number',
+        description: 'Maximum number of commits to return (default 20).',
+      },
+      pathspec: {
+        type: 'string',
+        description: 'Optional path/glob to limit history to (relative to the repo).',
+      },
+    },
+    additionalProperties: false,
+  },
+  handler: async (args: Record<string, unknown>, ctx: ToolContext) => {
+    const maxCount = limitArg(args.maxCount, 20, 'maxCount');
+    const argv = ['log', '--oneline', '-n', String(maxCount)];
+    if (args.pathspec !== undefined) argv.push('--', validatePathspec(args.pathspec));
+    const { stdout } = await runGitCapture(argv, { cwd: ctx.cwd, maxBytes: GIT_STATUS_MAX_BYTES });
+    const commits = stdout
+      .split('\n')
+      .filter((l) => l.length > 0)
+      .map((line) => {
+        const sp = line.indexOf(' ');
+        return sp === -1
+          ? { hash: line, subject: '' }
+          : { hash: line.slice(0, sp), subject: line.slice(sp + 1) };
+      });
+    return { commits };
+  },
+};
+
+/**
+ * git_show — stat summary for a commit/ref (files changed + insertions/deletions),
+ * NOT the full patch, so output stays bounded. `ref` is strictly validated.
+ */
+export const gitShowTool: ToolSpec = {
+  name: 'git_show',
+  description:
+    'Show the metadata and diffstat for a commit/ref (like `git show --stat <ref>`): ' +
+    'author, message, and the list of changed files with insertion/deletion counts — ' +
+    'not the full patch, so output stays bounded. Output is capped at maxBytes ' +
+    '(default 64 KiB) with a `truncated` flag. Read-only: never mutates the repository.',
+  permission: 'read',
+  parameters: {
+    type: 'object',
+    properties: {
+      ref: {
+        type: 'string',
+        description: 'The commit/ref to show, e.g. "HEAD", "HEAD~2", or a commit hash.',
+      },
+      maxBytes: {
+        type: 'number',
+        description: 'Maximum output bytes to return (default 65536).',
+      },
+    },
+    required: ['ref'],
+    additionalProperties: false,
+  },
+  handler: async (args: Record<string, unknown>, ctx: ToolContext) => {
+    const ref = validateRef(args.ref);
+    const maxBytes = limitArg(args.maxBytes, GIT_DEFAULT_MAX_BYTES, 'maxBytes');
+    const { stdout, truncated } = await runGitCapture(['show', '--stat', ref], {
+      cwd: ctx.cwd,
+      maxBytes,
+    });
+    return { ref, output: stdout, truncated };
+  },
+};
+
 /**
  * A registry pre-loaded with the built-in tools. The edit/exec tools are always
  * registered, but the permission gate keeps them least-privilege by default:
@@ -965,5 +1228,9 @@ export function builtinTools(opts?: { command?: Partial<CommandPolicy> }): ToolR
     .register(calculatorTool)
     .register(writeFileTool)
     .register(editFileTool)
+    .register(gitStatusTool)
+    .register(gitDiffTool)
+    .register(gitLogTool)
+    .register(gitShowTool)
     .register(createRunCommandTool(opts?.command));
 }
