@@ -129,17 +129,18 @@ cd glamfire && pnpm install && pnpm -r build
 node packages/cli/src/index.mjs --version
 ```
 
-> **What's live.** **`npm`, Homebrew, and Scoop are LIVE.** The
-> [`glamfire`](https://www.npmjs.com/package/glamfire) npm package (latest: `0.2.2`) is
+> **What's live.** **All four package managers are wired and shipping.** The
+> [`glamfire`](https://www.npmjs.com/package/glamfire) npm package (latest: `0.2.4`) is
 > published — verified by installing from the public registry and running the installed
 > `glam`; the [Homebrew tap](https://github.com/glamworks/homebrew-tap)
 > (`Formula/glamfire.rb`) and [Scoop bucket](https://github.com/glamworks/scoop-bucket)
-> (`bucket/glamfire.json`) are pushed on every `v*` tag by the release workflow. Each tag
-> also builds the checksums, the SBOM, sigstore signing, and a GitHub Release with all five
-> single‑file binaries + the tarball attached
-> ([releases](https://github.com/glamworks/glamfire/releases)). **Only `winget` is not yet
-> wired** — it needs a `winget‑pkgs` fork + `WINGET_TOKEN`. A Docker image for the
-> team/server profiles is still specified, not yet built.
+> (`bucket/glamfire.json`) are pushed on every `v*` tag; and **winget** is submitted to
+> [microsoft/winget‑pkgs](https://github.com/microsoft/winget-pkgs) by `wingetcreate` on
+> each release (the `winget install` line goes live once Microsoft's community review merges
+> the PR — that step is theirs, not ours). Each tag also builds the checksums, the SBOM,
+> sigstore signing, and a GitHub Release with all five single‑file binaries + the tarball
+> attached ([releases](https://github.com/glamworks/glamfire/releases)). A Docker image for
+> the team/server profiles is still specified, not yet built.
 
 ---
 

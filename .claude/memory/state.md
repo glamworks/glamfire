@@ -143,10 +143,16 @@ workflow. GOTCHA: glamworks has ORG-LEVEL DEPLOY KEYS DISABLED — publish-manif
 HTTPS token (x-access-token) not SSH. HOMEBREW_TAP_DEPLOY_KEY + SCOOP_BUCKET_DEPLOY_KEY secrets
 hold the general gh token (admin on both repos), NOT ssh keys despite the names.
 
+**ALL 4 PACKAGE MANAGERS WIRED (2026-07-01, v0.2.4)**: npm + Homebrew + Scoop LIVE; winget
+SUBMITTED via PR microsoft/winget-pkgs#396675 (Glamworks.Glamfire 0.2.4, OPEN — pending
+Microsoft community review/merge, then `winget install` goes live; that step is theirs).
+GOTCHA: wingetcreate is WINDOWS-ONLY (not a NuGet/dotnet tool) — winget runs in a dedicated
+`winget submit` windows-latest job (choco install wingetcreate) consuming manifests rendered by
+the linux release job. WINGET_TOKEN = general gh token (repo scope). Future releases auto-submit
+a new winget PR each tag.
+
 **Remaining — BLOCKED ON USER**:
-- **winget** (only channel left): needs a winget-pkgs fork + WINGET_TOKEN secret; publish-manifest.sh
-  winget path uses wingetcreate submit. Low priority (npm/brew/scoop cover the field).
-- **Memecoin**: stays NOT LIVE until user funds+authorizes.
+- **Memecoin**: stays NOT LIVE until user funds+authorizes (only outstanding item).
 
 **Next dev (key-independent, lock-step)**: git-ops + subagent-orchestration engine tools (M3);
 first glamfire-authored PR (M2); team Slack (#7); SDK; server/daemon; Docker. Open issues: #1,
