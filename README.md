@@ -198,8 +198,10 @@ every release.)
   least‑privilege permission gate, and a **hard token/cost budget that genuinely stops
   mid‑task** (each turn's output is capped by the remaining budget and any turn that
   crosses the ceiling reports `budget_exhausted`, not `done`). Sandboxed tools:
-  `read_file`, **`list_files` (glob)** and **`search_files` (grep)** for code navigation
-  (both cwd‑scoped, `read`‑permission, reusing the same symlink‑escape guard),
+  `read_file`, **`list_files` (glob)** and **`search_files` (grep)** for code navigation,
+  **read‑only git (`git_status`/`git_diff`/`git_log`/`git_show`)** for repo inspection
+  (all cwd‑scoped, `read`‑permission, no shell, credential‑env stripped, injection‑guarded —
+  write‑git stays out of the sandbox),
   `write_file`/`edit_file` (cwd‑scoped, symlink‑escape‑defended,
   `write`=ask→deny), and `run_command` (no‑shell, allowlisted, `exec`=**deny by default**,
   opt‑in via `--allow-exec`) — enough to close the dogfood read→edit→run loop; full

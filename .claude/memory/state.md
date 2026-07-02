@@ -154,7 +154,7 @@ a new winget PR each tag.
 **Remaining — BLOCKED ON USER**:
 - **Memecoin**: stays NOT LIVE until user funds+authorizes (only outstanding item).
 
-**Next dev (key-independent, lock-step)**: git-ops + subagent-orchestration engine tools (M3);
+**Next dev (key-independent, lock-step)**: git-ops READ tools DONE v0.3.0 (git_status/diff/log/show, read-only, sandboxed, injection-guarded, live-verified). Next: subagent-orchestration engine tool (M3);
 first glamfire-authored PR (M2); team Slack (#7); SDK; server/daemon; Docker. Open issues: #1,
 #7, #13 (+ #10 RFC). Dogfood the remaining engine tools THROUGH glamfire now that flip is proven.
 
