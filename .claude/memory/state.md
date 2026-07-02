@@ -137,10 +137,15 @@ Release-job fix: `pnpm install` before build-sbom.mjs (SBOM reads real dep versi
 `Cannot find module zod` → skipped publish). Cut a release: bump→commit→push→tag `vX.Y.Z`→push
 tag fires release.yml. GOTCHA: workflow_dispatch checks out main NOT the tag; tag-PUSH is correct.
 
+**npm + Homebrew + Scoop ALL LIVE (2026-07-01, v0.2.2)**: tap repo glamworks/homebrew-tap
+(Formula/glamfire.rb) + bucket glamworks/scoop-bucket (bucket/glamfire.json) pushed by release
+workflow. GOTCHA: glamworks has ORG-LEVEL DEPLOY KEYS DISABLED — publish-manifest.sh pushes over
+HTTPS token (x-access-token) not SSH. HOMEBREW_TAP_DEPLOY_KEY + SCOOP_BUCKET_DEPLOY_KEY secrets
+hold the general gh token (admin on both repos), NOT ssh keys despite the names.
+
 **Remaining — BLOCKED ON USER**:
-- **brew/scoop/winget publishes**: add repo secrets HOMEBREW_TAP_DEPLOY_KEY + SCOOP_BUCKET_DEPLOY_KEY
-  + WINGET_TOKEN, create repos glamworks/homebrew-tap + glamworks/scoop-bucket → next tag publishes
-  to those too (npm already live; manifests already rendered by CI).
+- **winget** (only channel left): needs a winget-pkgs fork + WINGET_TOKEN secret; publish-manifest.sh
+  winget path uses wingetcreate submit. Low priority (npm/brew/scoop cover the field).
 - **Memecoin**: stays NOT LIVE until user funds+authorizes.
 
 **Next dev (key-independent, lock-step)**: git-ops + subagent-orchestration engine tools (M3);
