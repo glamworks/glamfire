@@ -75,8 +75,8 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
   live vs GLM 5.2: M0 = glam run read README + proposed 3 real gaps; M1 = glamfire authored
   `docs/QUICKSTART.md` closing good-first-issue #11 (write_file tool; review caught a config-schema
   error → iterated to green → `glam config` loads it, doctor green, gates green). Commit tagged
-  w/ model id `accounts/fireworks/models/glm-5p2`. Next dogfood: M2 (glamfire-authored PR) +
-  self-hosting CI gate + wider engine tools (code search/git ops) for M3 autonomy.
+  w/ model id. **M2 PROVEN (v0.3.0)**: first glamfire-authored PR #15 merged (glamfire used
+  its own git_log tool to author CHANGELOG.md). Next dogfood: M3 (multi-file feature, review-only).
 - `scripts/smoke.mjs` (drives real CLI + `glam run`/`glam config`/`glam route`); version source.
 
 **DONE — live-verified vs real GLM 5.2 on Fireworks (2026-07-01, v0.1.0)**

@@ -107,8 +107,16 @@ bar for flipping a category. **Cost/task ≈ $0.01–0.02**, well inside center-
 economics. **Reversibility:** Claude Code remains available for any docs task glamfire
 can't yet do; gaps get filed as glamfire issues.
 
-- **Next (M2+):** open a glamfire-authored **PR** (not just a merged commit); widen engine
-  tools with **git ops + subagent orchestration** (code-search shipped in v0.2.0) to unlock
-  multi-file autonomy (M3); expand the flipped set beyond docs as each category is won.
+- **M2 — PROVEN (2026-07-02, v0.3.0).** First **glamfire-authored pull request**
+  ([#15](https://github.com/glamworks/glamfire/pull/15)) merged into `main`: glamfire used
+  its own **`git_log`** tool (shipped v0.3.0) to read the real commit history, then authored
+  `CHANGELOG.md` grounded only in real commits, and it landed as a reviewed PR (not just a
+  direct commit). Human role: review only; provenance tagged with the model id.
+- **Engine tools for M3 — code-search (v0.2.0) + read-only git (v0.3.0) SHIPPED.** `list_files`,
+  `search_files`, `git_status`/`git_diff`/`git_log`/`git_show` — all sandboxed, `read`-permission,
+  live-verified. Write-git stays out of the sandbox (orchestrator integrates). Remaining for
+  fuller M3 autonomy: a subagent-orchestration tool.
+- **Next (M3+):** multi-file feature completed by glamfire with only review-time involvement;
+  expand the flipped set beyond docs; add the subagent-orchestration engine tool.
 - The transition stays **reversible** — Claude Code remains the backstop until a
   category's gate is genuinely met.
