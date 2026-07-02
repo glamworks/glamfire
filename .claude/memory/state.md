@@ -38,8 +38,8 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
   bundle, no native deps, version inlined via Bun build plugin), 5-OS binaries (bun --compile,
   checksummed+sigstore), brew/scoop/winget manifests, CycloneDX SBOM, `.github/workflows/{ci,release}.yml`.
   Build: `bun scripts/build-npm.mjs --pack`, `build-binaries.mjs`, `verify-artifacts.mjs`.
-  PUBLISH GATED on user secrets: NPM_TOKEN, HOMEBREW_TAP_DEPLOY_KEY, SCOOP_BUCKET_DEPLOY_KEY,
-  WINGET_TOKEN + repos glamworks/homebrew-tap + glamworks/scoop-bucket must exist.
+  **PUBLISHING NOW LIVE (v0.2.1+)**: npm + Homebrew tap + Scoop bucket publish on every `v*`
+  tag; winget submits a PR to microsoft/winget-pkgs (windows job, wingetcreate). All secrets set.
   KNOWN: `glam doctor` install-check shows ✗ inside compiled binary (cosmetic; npm pkg ok).
 - **Memecoin (prepare-only, NOT LIVE)** — `marketing/meme-coin/`: real guarded devnet mint.mjs
   (Solana deps isolated, NOT in workspace), two-layer mainnet guard (irreversibility flag +
@@ -51,12 +51,15 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
   skip node_modules/.git/dist, capped results, zero new deps (fs recursion + glob→RegExp).
   Registered in `builtinTools()`, reachable from `glam run`, dispatch `[allow]` (no --yes).
   Live-verified vs GLM 5.2 (found budgetExhausted at loop.ts:355). Unlocks M3 navigation.
-  Next tool mini-features: git ops + subagent orchestration (not yet built — honest).
+- **Engine git READ tools (v0.3.0)** — `git_status`/`git_diff`/`git_log`/`git_show`, read-only,
+  reuse `execInSandbox` (no shell, fixed argv, credential-env stripped, 10s timeout, output cap),
+  injection-guarded (pathspec after `--`, ref regex `^[\w./~^@{}-]+$`, leading-`-` rejected). NO
+  write/commit/push git (stays with orchestrator, §7). Registered in builtinTools, `[allow]`,
+  live-verified vs GLM 5.2. Next tool mini-feature: subagent orchestration (not yet built — honest).
 - **Self-hosting CI gate (v0.2.0)** — `.github/workflows/ci.yml` job `self-hosting` drives
   `scripts/dogfood.mjs --stage read` (glamfire-on-glamfire) then asserts smoke+tests green;
-  fail-loud. GATED on `FIREWORKS_API_KEY` repo secret (present→live GLM; absent→clear skip
-  notice, never fake pass). Verified locally: exit 0, loop closed, 216 tests. USER must add
-  the repo secret to activate it in CI.
+  fail-loud. **ACTIVE**: FIREWORKS_API_KEY repo secret set → runs live GLM in CI, confirmed green
+  (run 28552478908). Absent→clear skip notice, never fake pass.
 - **bump-version.mjs fix (v0.2.0)** — v0.1.0 bump wrote package.json via raw JSON.stringify,
   expanding `workspaces` to multiline (Biome rejects) → lint failure on main. Root-caused:
   bump script now runs `biome format --write package.json`. GOTCHA: any script writing
@@ -91,8 +94,9 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
   Router replaces the placeholder `route_decision` in `loop.ts`; brain/skills compose into
   `RunState.system` + register `ToolSpec`s; budget ceilings live only on `Task.budget`.
 
-**Specified, not yet built** (lock-step, no shims): `@glamfire/router` (#5),
-`@glamfire/team` (#7), SDK, server mode, real binaries/packaging (#8), CI matrix.
+**Specified, not yet built** (lock-step, no shims): `@glamfire/team` (#7), SDK, server/daemon
+mode, Docker image, subagent-orchestration engine tool. (DONE since: router #5, packaging #8 +
+publishing, CI matrix, engine code-search + git-read tools.)
 
 **Router contract (from config) — Wave 3 must read these exact names**: config exposes
 `routing.default` (model id) + `routing.rules[]` (top-down, first match wins). Per-rule
