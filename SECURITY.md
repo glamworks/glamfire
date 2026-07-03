@@ -9,9 +9,9 @@ the full threat model.
 **Do not open a public issue for a security vulnerability.**
 
 Report privately via GitHub Security Advisories
-([Report a vulnerability](https://github.com/glamworks/glamfire/security/advisories/new))
-or email **security@glamworks.dev**. We aim to acknowledge within 72 hours and to keep
-you updated through remediation. Coordinated disclosure; we credit reporters who want it.
+([Report a vulnerability](https://github.com/glamworks/glamfire/security/advisories/new)).
+We aim to acknowledge within 72 hours and to keep you updated through remediation.
+Coordinated disclosure; we credit reporters who want it.
 
 ## Scope highlights
 

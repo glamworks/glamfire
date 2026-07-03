@@ -151,9 +151,13 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          # Release notes = this tag's CHANGELOG.md section (real, human-readable);
+          # fall back to auto-generated notes only if the section is missing.
+          awk -v ver="${TAG#v}" '$0 == "## v" ver {f=1; next} /^## /{if (f) exit} f' CHANGELOG.md > /tmp/release-notes.md
+          if [ -s /tmp/release-notes.md ]; then NOTES=(--notes-file /tmp/release-notes.md); else NOTES=(--generate-notes); fi
           gh release create "$TAG" \
             --title "$TAG" \
-            --generate-notes \
+            "${NOTES[@]}" \
             dist-bin/glam-* \
             dist-bin/SHA256SUMS.txt \
             dist-bin/SHA256SUMS.txt.sig \

@@ -30,3 +30,5 @@ base is part of the context‑rollover survival kit (see [CLAUDE.md](../CLAUDE.m
 | 22 | [22-dogfooding.md](22-dogfooding.md) | Self-hosting dev; Claude Code → glamfire transition; verify gates |
 | 23 | [23-second-model-and-provider.md](23-second-model-and-provider.md) | Second open-weight model (Qwen; DeepSeek fallback) + second US provider |
 | 24 | [24-creator-thesis-update.md](24-creator-thesis-update.md) | Creator thesis refresh (Jun–Jul 2026): context wars, routing, receipts |
+| 25 | [25-provider-landscape-2026-07.md](25-provider-landscape-2026-07.md) | Open-weight model × US provider landscape, cited prices + registry seed (July 2026) |
+| 26 | [26-ornith.md](26-ornith.md) | Ornith-1.0 (DeepReinforce): self-scaffolding coding models; licensing, hosting, harness-swing evidence |

@@ -207,3 +207,37 @@ orchestrator-integrated on `integration/context-wars-wave`, 354 tests, smoke PAS
 - Research: `research/24-creator-thesis-update.md` (thesis now context wars; DeepSeek =
   canonical migration story; routing-shaped adoption wave) + `research/25-provider-
   landscape-2026-07.md` + registry seed JSON (models/providers/prices, cited).
+
+**COMPLETION SWEEP (2026-07-03, post-v0.4.1)** — messaging + non-technical gaps closed:
+- README gained "What is this, concretely?" (agent example, 5 differentiators, why-now,
+  fit table vs Claude Code/opencode/Ollama-vLLM/OpenRouter/single-models/Goose, 5 use
+  cases) — then TWO honesty passes: competitive review (OpenRouter has Auto Router +
+  Agent SDK; opencode does per-agent models; Goose ships config multi-model, AAIF-
+  stewarded; do NOT claim wired vLLM adapter or routable Kimi) and verifier pass
+  (brain not user-reachable from glam yet — say ledger/config/cache are the owned files,
+  brain wiring "in build"; "authored" not "opened the PR"; ~2 cents not ~1; default
+  policy ships NO edge/escalation rule — phrase as "one routing rule away").
+- STANCE (user-set): context is local-first, inference is DELIBERATELY RENTED — "the
+  fire in the name is Fireworks-class serverless GPUs, not your laptop"; "local-first
+  describes your data, not your GPUs." In README + site. Never re-frame glamfire as
+  local-inference-first.
+- Site (glamworks.github.io) mirrors all of it (#concrete/#fits/#week sections).
+- QUICKSTART rewritten as install→doctor→key→five use-case walkthroughs, ALL output
+  real-captured at v0.4.1 (incl. live budget-stop + SIGINT). Fire-drill rule matches
+  CENTER-scored tasks only — docs carry the edge-rule note (a "refactor" prompt scores
+  edge and falls through; site/quickstart snippets verified to actually route).
+- Non-tech gaps closed: repo description/topics/homepage set (was old GLM-only pitch,
+  zero topics); v0.4.0/v0.4.1 release notes filled from CHANGELOG + release.yml now
+  auto-extracts the tag's CHANGELOG section; good-first-issues #20 (models --provider)
+  #21 (usage --month) #22 (catalog entry template); help-wanted on #16-19; product
+  issues from verifier: #23 budget_exhausted exit code (currently exits 0!), #24 run
+  header shows adapter id not provider, #25 local/vLLM adapter (unlocks Ornith
+  self-host), #26 default edge/escalation rule, #27 wire brain into glam run.
+  SECURITY/CoC dead glamworks.dev emails replaced with GitHub private reporting.
+- research/26-ornith.md: Ornith-1.0 (DeepReinforce, MIT, 9B/35B/397B; 31B unreleased) —
+  NO US serverless host yet → catalog/adapter = self-host tier via #25, does NOT change
+  GLM default or DeepSeek budget tier. Messaging gold: their own tables show the harness
+  swings Terminal-Bench up to 6 points (Opus 85→78.9 Terminus-2→Claude Code).
+- BLOCKED ON USER: (a) glamworks.dev domain dead (no DNS) — register+mailbox or stay on
+  GitHub reporting; (b) GitHub social-preview image upload (Settings, manual);
+  (c) npm/site copy for next release picks up new keywords/description at next tag.

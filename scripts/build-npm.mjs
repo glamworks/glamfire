@@ -77,8 +77,8 @@ const manifest = {
   name: PKG_NAME,
   version,
   description:
-    'The open, model-agnostic harness for the last mile of AI — the glam CLI. ' +
-    'Own your context, route each task to the cheapest capable model.',
+    'The open harness for the context wars — the glam CLI. Own your context, ' +
+    'route each task to the cheapest capable model, meter every run. Model-agnostic.',
   license: 'Apache-2.0',
   type: 'module',
   bin: { [BIN_NAME]: BIN_REL },

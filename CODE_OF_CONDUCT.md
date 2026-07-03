@@ -43,8 +43,10 @@ individual is officially representing the community in public spaces.
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to
-the maintainers at **conduct@glamworks.dev**. All complaints will be reviewed and
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported
+privately to the maintainers via
+[GitHub private reporting](https://github.com/glamworks/glamfire/security/advisories/new)
+(reaches maintainers only). All complaints will be reviewed and
 investigated promptly and fairly. Community leaders are obligated to respect the privacy
 and security of the reporter of any incident.
 
