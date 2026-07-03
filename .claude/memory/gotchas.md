@@ -57,3 +57,19 @@ them the hard way.
   branch of `scripts/version.mjs` silently printed nothing there, first surfaced by the
   doctor install-check regression test executing the script on Windows CI. ALWAYS write
   main-module checks as `import.meta.url === pathToFileURL(process.argv[1]).href`.
+
+## Integration gotchas (2026-07-03, orchestrator)
+
+- **Rebuild dist after every merge touching packages/*/src TS**: tests import
+  `@glamfire/*` via `dist/`; a stale dist made 11 provider-identity tests fail on
+  main while the source was correct. `npm run build` is part of the integration
+  checklist before gating.
+- **FIREWORKS_API_KEY lives in `~/.config/.env`** (`set -a; . ~/.config/.env; set +a`)
+  — NOT in the default shell env. Smoke's live checks are key-gated and print a loud
+  not-verified notice without it.
+- **Brain never bundles**: `packages/cli/src/memory.mjs` loads `@glamfire/brain` via a
+  runtime-composed import specifier so Bun.build can't inline the native store. Memory
+  therefore requires running from the repo/workspace (the dogfood setup does). Publishing
+  brain as an optionalDependency is an open product decision.
+- One-off vitest flake seen once on a full run, never reproduced in four re-runs
+  (name not captured) — watch CI.

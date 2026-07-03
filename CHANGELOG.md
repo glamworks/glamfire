@@ -4,8 +4,22 @@ All notable changes to this project are documented here. Based on the real git
 history; newest versions first. This project adheres to
 [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased
+## v0.5.0
 
+- **feat(engine/brain): memory is in the loop** — every `glam run` recalls relevant
+  records from the project's local brain store (`.glam/brain.db`, hybrid retrieval,
+  hard token cap, full provenance in the packed context) and writes a structured
+  episode (task, outcome, decisions, files touched, models, real cost) back after
+  the run. Header/receipt show what was recalled; `--json` gets a `memory` object.
+  Controls: `--no-memory`, `[memory]` in glam.toml, `GLAM_MEMORY=false`. The
+  self-contained npm bundle (no native store) says so honestly and runs without
+  memory — it never fakes recall. Verified live: a teach run then a recall run
+  against real Fireworks/GLM; a `--no-memory` control run could not answer. (#27)
+- **feat(scripts): `adopt-claude-code.mjs`** — brownfield seed of `glam adopt`
+  (#29): discovers existing Claude Code state on this machine (global + project
+  CLAUDE.md, project memory, auto-memory) and imports it into the project brain,
+  idempotently, so runs recall it from the first task. Claude Code files are
+  read-only inputs — never modified.
 - **feat(cli): BEHAVIOR CHANGE —** a run stopped by a budget/step/token ceiling now
   exits **3** instead of 0, so scripts and CI can tell a budget stop from `done`
   without parsing output. The documented, stable scheme (`glam help` /
