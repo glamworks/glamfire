@@ -165,7 +165,7 @@ prerequisite. **Local‑first describes your data, not your GPUs.**
 |---|---|---|
 | **Claude Code** | the best frontier coding agent | Keep it for the hard edge. glamfire routes the routine center of your workload to open models at a third to a fiftieth of frontier list price (GLM 5.2 vs Sonnet ≈ ⅓; DeepSeek V4 Flash vs Opus ≈ 1/50), with frontier as an **earned escalation** — plus a **hard per‑run budget stop no frontier‑lab agent ships**, and a spend ledger that lives in a file you own. |
 | **opencode & other OSS agents** | configurable agent CLIs | There you (or your agent config) assign models to agents and switch by hand. glamfire decides **per task, automatically** — price × capability × calibrated confidence, with escalation the cheap model must fail to trigger — and family switching is conformance‑tested, not vibes. |
-| **Ollama / vLLM** | run open weights yourself | A model server is not a work system. glamfire is the loop + routing + ledger on top — today via serverless FP8 rentals of the same weights your laptop can't hold (a local/vLLM‑endpoint adapter is specified and in build). |
+| **Ollama / vLLM** | run open weights yourself | A model server is not a work system. glamfire is the loop + routing + ledger **on top of your server, today**: the `local` adapter drives any OpenAI‑compatible endpoint (Ollama, vLLM, SGLang, LM Studio, DwarfStar/DS4) at **$0/token**, live‑verified against a real Ollama daemon — with hosted models one routing rule away when the task outgrows your hardware. |
 | **OpenRouter** | one key, 400+ models, auto‑router | A hosted middleman: even its auto‑router picks a model **per prompt**, and every request — plus your spend metadata — transits their gateway. glamfire goes **direct to providers you choose**, routes whole tasks, and keeps the loop, context store, budgets, and ledger on your disk. |
 | **A single open model (Hermes, GLM, DeepSeek…)** | a frontier‑class brain, free | A brain in a jar. glamfire is the jar‑opener: the harness that turns raw weights into a working, budgeted, tool‑using agent — and lets you swap the brain later. |
 | **Goose** | model‑agnostic OSS agent (AAIF‑stewarded) | Closest cousin, honestly — it ships config‑driven multi‑model (lead/worker, planner/executor). glamfire's wedge: routing **each task** automatically by price × capability × confidence with earned escalation, an owned portable context layer **guaranteed by test**, and per‑model conformance gates. |
@@ -205,8 +205,9 @@ load‑bearing subsystems:
 
 - **router** — scores each task **center ↔ edge** of distribution and sends it to the
   cheapest capable model, escalating to the frontier only when confidence is low.
-- **adapters** — a **tested harness per model family** (GLM 5.2/Fireworks, Anthropic,
-  OpenAI, local vLLM). Each turns a raw model into a *working agent* — no brain in a jar.
+- **adapters** — a **tested harness per model family** (GLM 5.2/Fireworks, Together,
+  Anthropic, and any local OpenAI‑compatible server: Ollama, vLLM, LM Studio,
+  DwarfStar/DS4). Each turns a raw model into a *working agent* — no brain in a jar.
 - **team** — a self‑hosted team surface (Slack/Discord/HTTP). The open answer to renting
   your team's context to a lab: the knowledge stays in **your** store.
 - **surfaces** — the `glam` CLI, an SDK, and a server/daemon mode.
@@ -331,7 +332,9 @@ every release.)
   the live decision. Wired into the engine via a neutral `RouterHook`.
 - **`glam models`** — the **evergreen model/provider landscape** (SPEC §5.3/§5.4):
   a built‑in, dated catalog of top open‑weight models across respected US‑hosted
-  providers (Fireworks, Together, DeepInfra, Mistral) plus the Claude escalation tier,
+  providers (Fireworks, Together, DeepInfra, Mistral) plus the Claude escalation tier
+  and the **$0 self‑host venues** (Ollama/vLLM/LM Studio generic rows, DwarfStar‑DS4
+  with its beta/Q2/hardware‑floor caveats, Ornith‑1.0 9B/35B),
   with **USD/1M prices, served quantization (FP8 vs FP4 caveats recorded per
   provider×model), context windows, capability tokens, license, `asOf` verification
   date, and source URL on every entry**. Filter with `--capable`, sort cheapest‑first
@@ -397,12 +400,18 @@ every release.)
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 
 **Built, one step from DONE** (all gates green; the only unverified step is the live call)
-- **Three tested adapters, seven model configs** behind one conformance suite:
+- **Four tested adapters, eight model configs** behind one conformance suite:
   **`fireworks-glm`** serving **GLM 5.2** (FP8, the default workhorse), **DeepSeek‑V4‑Pro**
   (FP8, 1M ctx, $1.74/$3.48 — the open escalation tier), and **DeepSeek‑V4‑Flash** (FP8,
   1M ctx, $0.14/$0.28 — the cheapest capable long‑context model anywhere); **`anthropic`**
   (Claude Messages API — frontier escalation); and **`together`** serving **GLM 5.2**,
-  **Qwen3‑Coder‑Next**, *and* **DeepSeek‑V4‑Pro** — the OpenAI‑compatible ones share one
+  **Qwen3‑Coder‑Next**, *and* **DeepSeek‑V4‑Pro**; and **`local`** — ANY
+  OpenAI‑compatible self‑host server (Ollama, vLLM, SGLang, LM Studio, antirez's
+  DwarfStar/DS4) at **$0/token**, with user‑declared capabilities/context (the router's
+  capability floor), a `--local`/`localOnly` privacy mode that **fails loud** instead of
+  silently falling back to a hosted provider, and **live verification against a real
+  Ollama daemon** (qwen3:0.6b tool round‑trip through the real `glam run`; conformance
+  fixtures captured from the live wire). The OpenAI‑compatible adapters share one
   core (system shaping, native tool calling, SSE tool‑call fragment reassembly, per‑model
   pricing/capabilities). The same **conformance battery** runs against every adapter/model
   (a model is "supported" only when it's green). Honesty caveats: Together serves GLM‑5.2 at

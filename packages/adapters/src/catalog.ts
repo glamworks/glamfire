@@ -29,6 +29,10 @@ import { z } from 'zod';
  * (e.g. DeepInfra as the FP4 cost floor) before glamfire ships an adapter for
  * it. The router only ever routes to models with real adapters — unwired
  * entries are informational and say so in `notes`.
+ *
+ * The self-host venues (ollama / vllm / lmstudio / dwarfstar) are served by the
+ * `local` adapter over any OpenAI-compatible base URL; their $0 prices are the
+ * REAL marginal token price of owned hardware, not a promotional zero.
  */
 export const CATALOG_PROVIDERS = [
   'fireworks',
@@ -36,35 +40,71 @@ export const CATALOG_PROVIDERS = [
   'deepinfra',
   'mistral',
   'anthropic',
+  'ollama',
+  'vllm',
+  'lmstudio',
+  'dwarfstar',
 ] as const;
 export type CatalogProvider = (typeof CATALOG_PROVIDERS)[number];
 
-export const catalogEntrySchema = z.strictObject({
-  /** Logical model name (family id, provider-neutral). */
-  model: z.string().min(1),
-  provider: z.enum(CATALOG_PROVIDERS),
-  /** Provider-specific model id / endpoint slug used on the wire. */
-  endpoint: z.string().min(1),
-  /** USD per 1M input tokens (null = provider publishes no serverless price). */
-  usdPerMInput: z.number().positive().nullable(),
-  /** USD per 1M cached-input tokens (null = not published; never guessed). */
-  usdPerMCachedInput: z.number().nonnegative().nullable(),
-  /** USD per 1M output tokens (null = provider publishes no serverless price). */
-  usdPerMOutput: z.number().positive().nullable(),
-  /** Served quantization for this provider×model, or null when unverified. */
-  quant: z.string().min(1).nullable(),
-  /** Context window in thousands of tokens. */
-  contextK: z.number().int().positive(),
-  /** Capability tokens (the @glamfire/config routing contract vocabulary). */
-  capabilities: z.array(capabilitySchema),
-  /** Weights license as stated by the model card / provider ("closed" = API-only). */
-  license: z.string().min(1),
-  /** ISO date the prices/specs were verified against `sourceUrl`. */
-  asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  sourceUrl: z.string().url(),
-  /** Honesty caveats: quant downgrades, dedicated-endpoint-only, unwired, etc. */
-  notes: z.string().optional(),
-});
+/** Self-host venues: $0/1M marginal price, reached via the `local` adapter. */
+export const SELF_HOST_PROVIDERS: readonly CatalogProvider[] = [
+  'ollama',
+  'vllm',
+  'lmstudio',
+  'dwarfstar',
+];
+
+/** Is this catalog provider a self-host venue (local adapter, $0 marginal price)? */
+export function isSelfHostProvider(provider: CatalogProvider): boolean {
+  return SELF_HOST_PROVIDERS.includes(provider);
+}
+
+export const catalogEntrySchema = z
+  .strictObject({
+    /** Logical model name (family id, provider-neutral). */
+    model: z.string().min(1),
+    provider: z.enum(CATALOG_PROVIDERS),
+    /** Provider-specific model id / endpoint slug used on the wire. */
+    endpoint: z.string().min(1),
+    /**
+     * USD per 1M input tokens (null = provider publishes no serverless price).
+     * $0 is legal ONLY for self-host venues: the true marginal token price of
+     * owned hardware. Hosted providers must be positive or null — never 0.
+     */
+    usdPerMInput: z.number().nonnegative().nullable(),
+    /** USD per 1M cached-input tokens (null = not published; never guessed). */
+    usdPerMCachedInput: z.number().nonnegative().nullable(),
+    /** USD per 1M output tokens (same rules as usdPerMInput). */
+    usdPerMOutput: z.number().nonnegative().nullable(),
+    /** Served quantization for this provider×model, or null when unverified. */
+    quant: z.string().min(1).nullable(),
+    /** Context window in thousands of tokens. */
+    contextK: z.number().int().positive(),
+    /** Capability tokens (the @glamfire/config routing contract vocabulary). */
+    capabilities: z.array(capabilitySchema),
+    /** Weights license as stated by the model card / provider ("closed" = API-only). */
+    license: z.string().min(1),
+    /** ISO date the prices/specs were verified against `sourceUrl`. */
+    asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    sourceUrl: z.string().url(),
+    /** Honesty caveats: quant downgrades, dedicated-endpoint-only, unwired, etc. */
+    notes: z.string().optional(),
+  })
+  .superRefine((entry, ctx) => {
+    // $0 is a real price only where the user owns the hardware. A hosted
+    // provider showing $0 would be an invented number — reject it at the schema.
+    if (isSelfHostProvider(entry.provider)) return;
+    for (const field of ['usdPerMInput', 'usdPerMOutput'] as const) {
+      if (entry[field] === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [field],
+          message: `hosted provider "${entry.provider}" cannot publish $0 — use null (unpublished) or a positive price`,
+        });
+      }
+    }
+  });
 export type CatalogEntry = z.infer<typeof catalogEntrySchema>;
 
 const caps = (...tokens: Capability[]): Capability[] => tokens;
@@ -360,6 +400,138 @@ export const BUILTIN_CATALOG: CatalogEntry[] = [
     asOf: '2026-07-03',
     sourceUrl: 'https://platform.claude.com/docs/en/pricing',
     notes: 'Cheapest frontier tier; 200K context.',
+  },
+  // --- Self-host venues (the `local` adapter over any OpenAI-compatible URL) --
+  // $0/1M is the REAL marginal token price of owned hardware — electricity and
+  // hardware are not billed per token. Context/capabilities below are honest
+  // venue-level floors; the ACTUAL numbers are whatever YOU declare in
+  // providers.local for the model you serve (research/26 §6, research/27 §3).
+  {
+    model: 'self-host (any model you pull)',
+    provider: 'ollama',
+    endpoint: 'http://localhost:11434/v1',
+    usdPerMInput: 0,
+    usdPerMCachedInput: 0,
+    usdPerMOutput: 0,
+    quant: null,
+    contextK: 32,
+    capabilities: caps('tool_calling', 'streaming'),
+    license: 'per served model',
+    asOf: '2026-07-03',
+    sourceUrl: 'https://docs.ollama.com/api/openai-compatibility',
+    notes:
+      'Wired via the `local` adapter and LIVE-VERIFIED against a real Ollama ' +
+      'daemon (qwen3:0.6b, tool round-trip + streaming + usage reporting). ' +
+      'Context, capabilities, and quant depend on the model you pull — declare ' +
+      'them in providers.local; the 32K/tools+streaming row is the default floor.',
+  },
+  {
+    model: 'self-host (any model you deploy)',
+    provider: 'vllm',
+    endpoint: 'http://localhost:8000/v1',
+    usdPerMInput: 0,
+    usdPerMCachedInput: 0,
+    usdPerMOutput: 0,
+    quant: null,
+    contextK: 32,
+    capabilities: caps('tool_calling', 'streaming'),
+    license: 'per served model',
+    asOf: '2026-07-03',
+    sourceUrl: 'https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html',
+    notes:
+      'Same `local` adapter + wire contract as the live-verified Ollama venue ' +
+      '(vLLM serves the identical OpenAI-compatible Chat Completions API; ' +
+      '--api-key mode supported via GLAM_LOCAL_API_KEY). Tool calling requires ' +
+      'launching vLLM with --enable-auto-tool-choice and a tool-call parser.',
+  },
+  {
+    model: 'self-host (any model you load)',
+    provider: 'lmstudio',
+    endpoint: 'http://localhost:1234/v1',
+    usdPerMInput: 0,
+    usdPerMCachedInput: 0,
+    usdPerMOutput: 0,
+    quant: null,
+    contextK: 32,
+    capabilities: caps('tool_calling', 'streaming'),
+    license: 'per served model',
+    asOf: '2026-07-03',
+    sourceUrl: 'https://lmstudio.ai/docs/app/api/endpoints/openai',
+    notes:
+      'Same `local` adapter + wire contract as the live-verified Ollama venue ' +
+      '(LM Studio serves the identical OpenAI-compatible API on port 1234). ' +
+      'Simon Willison ran Ornith-1.0-35B here at ~103 tok/s (research/26).',
+  },
+  {
+    model: 'deepseek-v4-flash',
+    provider: 'dwarfstar',
+    endpoint: 'http://127.0.0.1:8000/v1',
+    usdPerMInput: 0,
+    usdPerMCachedInput: 0,
+    usdPerMOutput: 0,
+    quant: 'Q2 expert-only',
+    contextK: 100,
+    capabilities: caps('tool_calling', 'streaming'),
+    license: 'MIT (engine and weights)',
+    asOf: '2026-07-03',
+    sourceUrl: 'https://github.com/antirez/ds4',
+    notes:
+      "antirez's DwarfStar/DS4 — the $0/token LOCAL venue for glamfire's " +
+      'existing budget-tier model (same brain as Fireworks FP8 at $0.14/$0.28). ' +
+      'Asymmetric quantization: only routed MoE experts at IQ2_XXS/Q2_K; ' +
+      'attention/routing stay high-precision (~87 GB weights). ' +
+      "BETA by the author's own label. Hardware floor 96–128 GB unified memory " +
+      '(~87 GB weights) — NOT laptop-class. Q2 quality is NOT independently ' +
+      'verified (pi-ds4: tool loops "will struggle", validated only to 32K); ' +
+      'practical context cap ~100K vs 1M hosted. Rides the generic `local` ' +
+      'adapter contract (OpenAI endpoint live-verified against Ollama, not yet ' +
+      'against a running DS4). Byte-exact tool-call ID replay is REQUIRED by ' +
+      "DS4's exact-replay design and is a tested glamfire contract (research/27).",
+  },
+  {
+    model: 'ornith-1.0-9b',
+    provider: 'vllm',
+    endpoint: 'deepreinforce-ai/Ornith-1.0-9B',
+    usdPerMInput: 0,
+    usdPerMCachedInput: 0,
+    usdPerMOutput: 0,
+    quant: null,
+    contextK: 262,
+    capabilities: caps('tool_calling', 'streaming', 'long_context'),
+    license: 'MIT',
+    asOf: '2026-07-03',
+    sourceUrl: 'https://huggingface.co/deepreinforce-ai/Ornith-1.0-9B',
+    notes:
+      'Flagship self-host tier, small size (9B dense, ~19 GB bf16, ~6 GB Q4 ' +
+      'GGUF — laptop-class; GGUF also runs on Ollama/LM Studio). NO US ' +
+      'serverless per-token host as of asOf. Vendor-benchmarked ONLY ' +
+      '(SWE-bench Verified 69.4 self-reported, no independent reproduction; ' +
+      'HN reports hallucination in tool-free chat). Serves via vLLM>=0.19.1 / ' +
+      'SGLang>=0.5.9; reasoning model emitting <think> blocks (handled by the ' +
+      'local adapter). Not yet live-verified by glamfire — rides the generic ' +
+      'local adapter contract.',
+  },
+  {
+    model: 'ornith-1.0-35b',
+    provider: 'vllm',
+    endpoint: 'deepreinforce-ai/Ornith-1.0-35B',
+    usdPerMInput: 0,
+    usdPerMCachedInput: 0,
+    usdPerMOutput: 0,
+    quant: null,
+    contextK: 262,
+    capabilities: caps('tool_calling', 'streaming', 'long_context'),
+    license: 'MIT',
+    asOf: '2026-07-03',
+    sourceUrl: 'https://huggingface.co/deepreinforce-ai/Ornith-1.0-35B',
+    notes:
+      'Flagship self-host tier, strongest laptop-class size (35B MoE, ~3B ' +
+      'active, ~25 GB Q5_K_M GGUF; Willison measured ~103 tok/s in LM Studio). ' +
+      'Vendor-benchmarked ONLY (SWE-bench Verified 75.6 self-reported — treat ' +
+      'skeptically pending independent evals; GLM-5.2 still beats the whole ' +
+      "family on Terminal-Bench in the vendor's own tables). 397B and 31B " +
+      'deliberately not listed (8×80GB is not a realistic user path; 31B has ' +
+      'no public checkpoint). Not yet live-verified by glamfire.',
   },
 ];
 

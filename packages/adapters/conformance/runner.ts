@@ -107,20 +107,35 @@ export function runConformance(makeCase: () => ConformanceCase, label?: string):
       }
     });
 
-    it('prices coherently: zero is free, more costs more, cache is cheaper', () => {
+    it('prices coherently: zero is free, more costs more, cache is cheaper ($0 self-host: everything is exactly $0)', () => {
       expect(adapter.pricing({ inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 })).toBe(0);
 
       const inSmall = adapter.pricing({ inputTokens: 1000, cachedInputTokens: 0, outputTokens: 0 });
       const inBig = adapter.pricing({ inputTokens: 2000, cachedInputTokens: 0, outputTokens: 0 });
+      const out = adapter.pricing({ inputTokens: 0, cachedInputTokens: 0, outputTokens: 1000 });
+      const cached = adapter.pricing({ inputTokens: 0, cachedInputTokens: 1000, outputTokens: 0 });
+
+      // A self-host venue's REAL marginal token price is $0 (owned hardware).
+      // The honest contract there is different but just as strict: every usage
+      // must price to exactly $0 — a "free" adapter that ever bills is a bug.
+      const declaredFree =
+        adapter.pricing({
+          inputTokens: 1_000_000,
+          cachedInputTokens: 0,
+          outputTokens: 1_000_000,
+        }) === 0;
+      if (declaredFree) {
+        for (const price of [inSmall, inBig, out, cached]) expect(price).toBe(0);
+        return;
+      }
+
       expect(inSmall).toBeGreaterThan(0);
       expect(inBig).toBeGreaterThan(inSmall);
 
       // Output is never cheaper than input per token, for any real provider.
-      const out = adapter.pricing({ inputTokens: 0, cachedInputTokens: 0, outputTokens: 1000 });
       expect(out).toBeGreaterThanOrEqual(inSmall);
 
       // Cached input is strictly cheaper than fresh input, and non-negative.
-      const cached = adapter.pricing({ inputTokens: 0, cachedInputTokens: 1000, outputTokens: 0 });
       expect(cached).toBeGreaterThanOrEqual(0);
       expect(cached).toBeLessThan(inSmall);
     });
@@ -138,6 +153,29 @@ export function runConformance(makeCase: () => ConformanceCase, label?: string):
 
       expect(req.url).toMatch(/^https?:\/\//);
       expect(Object.keys(req.headers).length).toBeGreaterThan(0);
+    });
+
+    it('replays tool-call IDs byte-exact (DwarfStar/DS4 exact-replay contract, research/27)', () => {
+      // DS4 keys original DSML blocks off the tool-call IDs the client sends
+      // back: rewriting/normalizing an ID breaks replay (and, on hosted
+      // providers, silently breaks prompt caching). Thread an exotic ID through
+      // the sample state and require it to survive encoding byte-identical.
+      const exotic = 'dsml:blk_7f3A-Z.09|replay==';
+      const state: RunState = {
+        ...c.sampleState,
+        messages: c.sampleState.messages.map((m) => {
+          if (m.role === 'assistant') {
+            return {
+              ...m,
+              toolCalls: m.toolCalls.map((t) => (t.id === 'call_1' ? { ...t, id: exotic } : t)),
+            };
+          }
+          if (m.role === 'tool' && m.callId === 'call_1') return { ...m, callId: exotic };
+          return m;
+        }),
+      };
+      const facts = c.inspectRequest(adapter.encodeRequest(state, { stream: false }));
+      expect(facts.toolResultIds).toContain(exotic);
     });
 
     it('marks a streaming request as streaming', () => {

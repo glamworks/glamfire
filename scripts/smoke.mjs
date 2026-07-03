@@ -330,6 +330,164 @@ check('glam route picks DeepSeek-V4-Flash as cheapest capable when a rule lists 
   }
 });
 
+check('glam models lists the self-host tier ($0 venues incl. DwarfStar-DS4) honestly', () => {
+  const out = runModels([]);
+  if (!/self-host \(any model you pull\)\s+ollama\s+\$0\.00\s+\$0\.00/.test(out)) {
+    throw new Error('ollama $0 self-host row missing');
+  }
+  if (!/deepseek-v4-flash\s+dwarfstar\s+\$0\.00\s+\$0\.00/.test(out)) {
+    throw new Error('DwarfStar-DS4 $0 row missing');
+  }
+  if (!out.includes('ornith-1.0-35b')) throw new Error('Ornith-1.0-35B self-host row missing');
+  // The honesty flags must reach a human, not just the source code.
+  if (!out.includes('BETA')) throw new Error('DS4 beta flag missing from notes');
+  if (!out.includes('NOT independently verified')) {
+    throw new Error('DS4 Q2 quality caveat missing from notes');
+  }
+  if (!out.includes('96–128 GB')) throw new Error('DS4 hardware-floor caveat missing from notes');
+});
+
+check('glam route picks an explicitly listed $0 local model, keeping hosted escalation', () => {
+  // Offline, no key: a project glam.toml lists a local model (providers.local)
+  // and adds it as a routing candidate. The router must pick it as the cheapest
+  // capable candidate ($0 self-host) while KEEPING the hosted model in the
+  // cascade for escalation — and `--local` must fail LOUD when the fallback is
+  // hosted (never a silent hosted call in local-only mode).
+  const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-local-'));
+  try {
+    writeFileSync(
+      join(dir, 'glam.toml'),
+      '[providers.local]\n' +
+        'baseUrl = "http://localhost:11434/v1"\n' +
+        'models = ["qwen3:0.6b"]\n' +
+        'capabilities = ["tool_calling", "streaming"]\n' +
+        '\n' +
+        '[[routing.rules]]\n' +
+        'distribution = "center"\n' +
+        'requires = ["tool_calling"]\n' +
+        'candidates = ["qwen3:0.6b", "accounts/fireworks/models/glm-5p2"]\n',
+    );
+    const env = { PATH: process.env.PATH, HOME: dir, USERPROFILE: dir };
+    const out = execFileSync('node', [cli, 'route', 'Summarize this paragraph in one sentence.'], {
+      encoding: 'utf8',
+      cwd: dir,
+      env,
+    });
+    if (!/chosen model:\s+qwen3:0\.6b/.test(out)) {
+      throw new Error(`$0 local candidate should win the center rule, got:\n${out}`);
+    }
+    if (!/projected:\s+\$0\.0000/.test(out)) throw new Error('local route not projected at $0');
+    if (!/cascade: qwen3:0\.6b -> accounts\/fireworks\/models\/glm-5p2/.test(out)) {
+      throw new Error('hosted escalation candidate missing from the cascade');
+    }
+    // --local on an edge-shaped task (no matching rule -> hosted default) must
+    // fail loud, never silently route to a hosted provider.
+    try {
+      execFileSync(
+        'node',
+        [cli, 'route', '--local', 'Design a distributed system; prove correctness step by step.'],
+        { encoding: 'utf8', cwd: dir, env },
+      );
+      throw new Error('expected non-zero exit for --local with a hosted fallback');
+    } catch (err) {
+      if (err.status !== 1) throw new Error(`expected exit 1, got ${err.status}`);
+      if (!String(err.stderr).includes('local_only routing is set')) {
+        throw new Error('missing loud local_only failure message');
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- local adapter LIVE smoke: a real run against a real local server ---------
+// Exercised only when an Ollama daemon is up AND the pinned model is pulled.
+// When it cannot run, the smoke says EXACTLY what was not exercised — loudly —
+// and never silently passes over it.
+
+const LOCAL_SMOKE_MODEL = 'qwen3:0.6b';
+
+function ollamaDaemonModels() {
+  // Synchronous daemon probe (2s budget): node -e fetch keeps this portable
+  // (no curl dependency on Windows CI).
+  const script = `
+    fetch('http://localhost:11434/api/tags', { signal: AbortSignal.timeout(2000) })
+      .then((r) => r.json())
+      .then((j) => { process.stdout.write(JSON.stringify(j.models.map((m) => m.name))); })
+      .catch(() => { process.stdout.write('null'); });
+  `;
+  try {
+    const out = execFileSync('node', ['-e', script], { encoding: 'utf8' });
+    return JSON.parse(out);
+  } catch {
+    return null;
+  }
+}
+
+{
+  const models = ollamaDaemonModels();
+  const available = Array.isArray(models) && models.includes(LOCAL_SMOKE_MODEL);
+  if (!available) {
+    // LOUD skip: name exactly what was not exercised and how to enable it.
+    process.stdout.write(
+      `  ⚠ SKIPPED (not exercised): local-adapter LIVE run — no Ollama daemon at localhost:11434 with "${LOCAL_SMOKE_MODEL}" pulled.\n    NOT exercised: real glam run against a real local server (tool round-trip, $0 cost line).\n    Enable: install Ollama, run \`ollama pull ${LOCAL_SMOKE_MODEL}\`, keep the daemon up, re-run the smoke.\n    (The hermetic local-adapter contract still ran above: conformance fixtures, routing, catalog.)\n`,
+    );
+  } else {
+    check(
+      `local adapter LIVE: glam run tool round-trip on Ollama ${LOCAL_SMOKE_MODEL} at $0`,
+      () => {
+        const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-local-live-'));
+        try {
+          writeFileSync(
+            join(dir, 'glam.toml'),
+            `[providers.local]\nbaseUrl = "http://localhost:11434/v1"\nmodels = ["${LOCAL_SMOKE_MODEL}"]\ncapabilities = ["tool_calling", "streaming"]\n`,
+          );
+          writeFileSync(join(dir, 'notes.txt'), 'The secret animal is: armadillo\n');
+          // No FIREWORKS_API_KEY in the env: a fully local run needs no key.
+          const env = { PATH: process.env.PATH, HOME: dir, USERPROFILE: dir };
+          // Pre-warm the model (a cold Ollama load can take minutes when other
+          // models occupy memory) so the glam run below measures warm inference.
+          // A warm-up FAILURE fails the check — daemon up + model pulled but not
+          // serving is a real problem, not a skippable one.
+          const warmScript = `
+            fetch('http://localhost:11434/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: '${LOCAL_SMOKE_MODEL}', max_tokens: 4,
+                messages: [{ role: 'user', content: 'hi' }] }),
+              signal: AbortSignal.timeout(240000),
+            }).then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1));
+          `;
+          execFileSync('node', ['-e', warmScript], { encoding: 'utf8', timeout: 250_000 });
+          const out = execFileSync(
+            'node',
+            [
+              cli,
+              'run',
+              'Read the file notes.txt using the read_file tool and tell me which animal it mentions.',
+              '--model',
+              LOCAL_SMOKE_MODEL,
+              '--yes',
+            ],
+            { encoding: 'utf8', cwd: dir, env, timeout: 300_000 },
+          );
+          if (!out.includes(`glamfire ${VERSION}`)) throw new Error('run header missing version');
+          if (!out.includes('adapter: local')) throw new Error('local adapter not active');
+          if (!/self-host, declared/.test(out)) throw new Error('missing $0 self-host price line');
+          if (!/read_file ok/.test(out)) throw new Error('real tool round-trip missing');
+          if (!out.toLowerCase().includes('armadillo')) {
+            throw new Error(`model did not surface the file content:\n${out}`);
+          }
+          if (!/cost: \$0\.000000/.test(out)) throw new Error('$0.000000 cost line missing');
+          if (!/status: done/.test(out)) throw new Error('run did not finish done');
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      },
+    );
+  }
+}
+
 check('glam run without FIREWORKS_API_KEY fails with actionable guidance', () => {
   // Real surface, real config resolution: with no key the run command must fail
   // loudly and tell the user exactly what to do — never silently fake a call.

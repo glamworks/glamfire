@@ -7,7 +7,9 @@ agent*. The same cases run against **every** adapter and **every** model on it:
 `fireworks-glm` (GLM-5.2, DeepSeek-V4-Pro, DeepSeek-V4-Flash — the DeepSeek
 fixtures are LIVE Fireworks wire captures), `together` (GLM-5.2 at FP4,
 Qwen3-Coder-Next at FP8, **and** DeepSeek-V4-Pro on Together AI), `anthropic`
-(Claude), … It is the gate the harness exists to defend: a new adapter/model is
+(Claude), and `local` (ANY OpenAI-compatible self-host server — the committed
+fixtures are LIVE Ollama qwen3:0.6b wire captures; the identical contract covers
+vLLM/SGLang/LM Studio/DwarfStar-DS4). It is the gate the harness exists to defend: a new adapter/model is
 not "done" — and a model is not "supported" — until `runConformance` passes for
 it. Pass an optional `label` to disambiguate multiple models on one adapter
 (e.g. `runConformance(makeCase, 'DeepSeek-V4-Flash · FP8')`).
@@ -22,7 +24,13 @@ hermetic and runs in CI with no live keys:
   (positive context/output windows, output ≤ context, all flags boolean).
 - **Pricing sanity** — zero usage is free; cost rises with tokens; output is
   never cheaper than input per token; cached input is strictly cheaper than
-  fresh input.
+  fresh input. A **declared-free ($0 self-host) adapter** is held to the honest
+  inverse: every usage must price to exactly $0 — a "free" venue that ever
+  bills is a bug.
+- **Byte-exact tool-call ID replay** — an exotic tool-call ID threaded through
+  history survives `encodeRequest` byte-identical (DwarfStar/DS4's exact-replay
+  design keys DSML blocks off the IDs the client returns — research/27; ID
+  rewriting also silently breaks hosted prompt caching).
 - **Request shaping** — `encodeRequest` emits the system prompt, re-emits tools
   in the provider's native grammar, threads tool-call results back by id, and
   sets a positive max-output-tokens.
@@ -71,3 +79,5 @@ Each adapter ships a capture script under `../scripts/` that records a **real**
 streamed response using the adapter's own `encodeRequest`, writes the raw wire
 bytes to a fixture, and re-proves the committed parser reproduces it. Run it with
 the provider key set (`FIREWORKS_API_KEY` / `ANTHROPIC_API_KEY`) to refresh.
+The `local` adapter's `capture-local-fixtures.mjs` needs no key — just a running
+local server (`ollama pull qwen3:0.6b`, daemon up).

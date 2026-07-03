@@ -347,6 +347,10 @@ export async function refreshCatalog(entries, env, { fetchImpl = fetch, today } 
     'anthropic/deepinfra/mistral: no machine-readable pricing endpoint wired — ' +
       'built-in data kept (see each entry sourceUrl)',
   );
+  notices.push(
+    'self-host venues (ollama/vllm/lmstudio/dwarfstar): $0 marginal price is a ' +
+      'property of owned hardware — nothing to refresh',
+  );
 
   const changes = diffCatalogs(entries, updated);
   return { entries: updated, changes, notices, refreshedProviders };
