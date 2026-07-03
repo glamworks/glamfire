@@ -74,29 +74,36 @@ glam run "read this repo and write a CHANGELOG.md from the git history" --max-us
 
 Same shape of tool as Claude Code or opencode: it plans, calls real tools (read/write/edit
 files, search code, read git, run allowed commands), observes the results, iterates, and
-stops when the work is done — or when its budget is hit. glamfire wrote its own
-`CHANGELOG.md` this way, opened the PR, and it merged; the run cost about a cent.
+stops when the work is done — or when its budget is hit. glamfire authored its own
+`CHANGELOG.md` this way — the PR merged with human review as the gate — and a faithful
+re-run of that task costs about two cents.
 
 The difference is everything wrapped around that loop:
 
 1. **It picks the model per task, not per subscription.** The router scores each task
    center‑vs‑edge and sends it to the **cheapest model that can actually do it** — open
-   weights for the routine 80%, frontier only when confidence says the cheap model can't
-   hold it. `glam route "<task>"` shows you the decision, offline, before any money moves.
+   weights for the routine 80%; frontier escalation is one routing rule away (bring an
+   Anthropic key, the cascade is wired and tested). `glam route "<task>"` shows you the
+   decision, offline, before any money moves.
 2. **It bills like a meter, not a faith commitment.** `--max-usd` is a hard ceiling that
    genuinely stops a run mid‑task (checked every turn, honest partial cost on interrupt).
    Every run lands in a local ledger — `glam usage` shows spend by day, model, provider,
    with monthly budget warnings.
-3. **Your context is a file on your disk.** The brain is SQLite you own — exportable to
-   human‑readable JSONL and back, bit‑exact, tested. The memory that makes an agent good
-   at *your* work stays yours when the model underneath changes. (The **context** is
-   local. The **intelligence** is deliberately not — see the next section.)
+3. **What it knows about you lives in files you own.** Your config, your usage ledger,
+   and your model cache are plain files on your disk. The context store (open brain —
+   SQLite + vectors, exportable to human‑readable JSONL and back, bit‑exact, tested) is
+   built and gated the same way; wiring it into `glam run`'s loop is in build, and it
+   will never live anywhere but your disk. (The **context** is local. The
+   **intelligence** is deliberately not — see the next section.)
 4. **Models are swappable parts.** Each model family gets a conformance‑tested adapter —
    the per‑model tuning that normally makes migration a rewrite is done once, in the open,
-   gated by tests. Adding DeepSeek V4 to your routing was one TOML line, not a migration.
-5. **It watches the market so you don't.** `glam models` is a live catalog of top
-   open‑weight models across respected US hosts — real prices with as‑of dates;
-   `--refresh` pulls current prices and calls out drops.
+   gated by tests. Adding DeepSeek V4 to your routing is one candidate line in a routing
+   rule, not a migration.
+5. **It watches the market so you don't.** `glam models` is a catalog of top open‑weight
+   models across respected US hosts — real prices, every one dated and sourced;
+   `--refresh` pulls whatever providers actually publish machine‑readably (Together
+   prices with a key; Fireworks availability — it publishes no machine prices, and the
+   command says so instead of faking freshness) and calls out every drop it can prove.
 
 ### Why now — the two advancements underneath
 
@@ -126,7 +133,7 @@ prerequisite. **Local‑first describes your data, not your GPUs.**
 
 | You use | It is | glamfire, next to it |
 |---|---|---|
-| **Claude Code** | the best frontier coding agent | Keep it for the hard edge. glamfire routes the routine center of your workload to open models at a fifth to a thirtieth of the price, with frontier as an **earned escalation** — plus a **hard per‑run budget stop no frontier‑lab agent ships**, and a spend ledger that lives in a file you own. |
+| **Claude Code** | the best frontier coding agent | Keep it for the hard edge. glamfire routes the routine center of your workload to open models at a third to a fiftieth of frontier list price (GLM 5.2 vs Sonnet ≈ ⅓; DeepSeek V4 Flash vs Opus ≈ 1/50), with frontier as an **earned escalation** — plus a **hard per‑run budget stop no frontier‑lab agent ships**, and a spend ledger that lives in a file you own. |
 | **opencode & other OSS agents** | configurable agent CLIs | There you (or your agent config) assign models to agents and switch by hand. glamfire decides **per task, automatically** — price × capability × calibrated confidence, with escalation the cheap model must fail to trigger — and family switching is conformance‑tested, not vibes. |
 | **Ollama / vLLM** | run open weights yourself | A model server is not a work system. glamfire is the loop + routing + ledger on top — today via serverless FP8 rentals of the same weights your laptop can't hold (a local/vLLM‑endpoint adapter is specified and in build). |
 | **OpenRouter** | one key, 400+ models, auto‑router | A hosted middleman: even its auto‑router picks a model **per prompt**, and every request — plus your spend metadata — transits their gateway. glamfire goes **direct to providers you choose**, routes whole tasks, and keeps the loop, context store, budgets, and ledger on your disk. |
