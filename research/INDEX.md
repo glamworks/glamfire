@@ -37,3 +37,4 @@ base is part of the context‑rollover survival kit (see [CLAUDE.md](../CLAUDE.m
 | 29 | [29-capability-grounding.md](29-capability-grounding.md) | Capability-grounded routing: benchmark/pricing data sources + licensing, task→benchmark taxonomy, capability×price scorer, per-task cost estimation |
 | 30 | [30-team-sync.md](30-team-sync.md) | Team sync: personal/team brain split, git+append-only sync, one-unit Cloudflare deploy ($0–5/mo), Access auth, team usage/cost + audit schema |
 | 31 | [31-flat-file-knowledge.md](31-flat-file-knowledge.md) | Flat-file knowledge: Karpathy grep+markdown thesis, files-as-truth + SQLite-as-index prior art, sync semantics, source-vs-summary frontmatter, objection-killing one-liner |
+| 32 | [32-number-one.md](32-number-one.md) | Road to #1: mid-2026 class map (opencode/OpenClaw/pi/Goose…), table-stakes gaps, differentiators, ranked top-20 backlog, realistic wedge |
