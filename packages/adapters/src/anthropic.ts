@@ -339,6 +339,8 @@ function neutralToAnthropic(messages: NeutralMessage[]): Record<string, unknown>
 
 export class AnthropicAdapter implements StreamingAdapter {
   readonly id = 'anthropic';
+  /** Stable lowercase provider id serving the model (issue #24 display fix). */
+  readonly provider = 'anthropic';
   readonly capabilities: Capabilities = {
     contextWindow: 1_000_000,
     maxOutputTokens: 128_000,

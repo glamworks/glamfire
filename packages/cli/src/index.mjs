@@ -42,6 +42,10 @@ Global options:
   -v, --version      Print the glamfire version
   -h, --help         Show this help
 
+Exit codes (stable — safe to script against):
+  0 done · 1 error · 2 usage error · 3 budget/step ceiling reached (run) · 130 interrupted
+  See \`glam run --help\` for the full table.
+
 Get started (first run):
   1. glam doctor                          check your environment (it tells you how to fix anything missing)
   2. export FIREWORKS_API_KEY="<key>"     create one at https://app.fireworks.ai/settings/users/api-keys

@@ -171,6 +171,7 @@ export class TogetherAdapter extends OpenAICompatibleAdapter {
     const info = togetherModelInfo(config.model);
     super({
       id: 'together',
+      provider: 'together',
       baseUrl: config.baseUrl,
       apiKey: config.apiKey,
       model: config.model,

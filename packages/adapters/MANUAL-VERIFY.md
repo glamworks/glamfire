@@ -38,9 +38,9 @@ node packages/cli/src/index.mjs run \
 ```
 
 Expect to observe, for real:
-- a run header: `glamfire <version> · run`, `adapter: fireworks-glm`,
-  `model: accounts/fireworks/models/glm-5p2`, the routing honesty note, and the
-  effort/tier/budget line;
+- a run header: `glamfire <version> · run`, `provider: fireworks`,
+  `model: glm-5.2 (accounts/fireworks/models/glm-5p2)`, the routing honesty note,
+  and the effort/tier/budget line;
 - streamed assistant text from GLM-5.2;
 - a `→ calculator({"expression":"(2 + 3) * 4"}) [allow]` dispatch and a
   `← calculator ok` observation (the engine ran the real local tool);
@@ -78,6 +78,8 @@ A tiny ceiling stops the run even mid-task:
 ```bash
 node packages/cli/src/index.mjs run "Write a 2000-word essay about routing." --max-usd 0.001
 # -> status: budget_exhausted (hard ceiling enforced by the engine)
+echo $?
+# -> 3 (the documented budget-stop exit code — distinguishable from done in scripts)
 ```
 
 ---

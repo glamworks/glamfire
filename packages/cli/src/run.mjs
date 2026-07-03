@@ -3,15 +3,25 @@
 // Loads provider config, selects the fireworks-glm adapter with the default GLM
 // model, runs the plan->act->observe loop, streams the model output, dispatches
 // tool calls through the permission gate, and prints a run header (version +
-// active adapter/model, SPEC §9) plus a final token/cost summary.
+// serving provider/model family, SPEC §9) plus a final token/cost summary.
 
 import { readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { createFireworksGlmAdapter, resolveFireworksConfig } from '@glamfire/adapters';
+import {
+  catalogEntry,
+  createFireworksGlmAdapter,
+  resolveFireworksConfig,
+} from '@glamfire/adapters';
 import { ConfigError, loadConfig } from '@glamfire/config';
 import { builtinTools, defaultPolicy, runTask } from '@glamfire/engine';
 import { PolicyError, explainDecision } from '@glamfire/router';
-import { appendRecord, budgetStatus, buildRunRecord, readLedger } from './ledger.mjs';
+import {
+  appendRecord,
+  budgetStatus,
+  buildRunRecord,
+  providerFromAdapterId,
+  readLedger,
+} from './ledger.mjs';
 import { buildModelRegistry, buildRouter } from './router.mjs';
 import { CODES, color, useColor } from './ui.mjs';
 
@@ -42,6 +52,13 @@ Options:
 The model is chosen by the cost-aware router from your routing policy (center work
 defaults to GLM 5.2 on Fireworks). Passing --model bypasses routing for that run.
 See \`glam route "<prompt>"\` for an offline routing preview.
+
+Exit codes (stable — safe to script against):
+  0    done          the task finished within its ceilings
+  1    error         provider/engine error
+  2    usage error   bad flags or a missing prompt
+  3    budget stop   a --max-usd / --max-tokens / --max-steps ceiling was reached
+  130  interrupted   stopped by Ctrl-C (128 + SIGINT)
 
 Requires FIREWORKS_API_KEY. Run \`glam doctor\` to check your environment.
 `;
@@ -134,6 +151,37 @@ function parseArgs(args) {
 
 function fmtUSD(n) {
   return `$${n.toFixed(n < 0.01 ? 6 : 4)}`;
+}
+
+/**
+ * The documented, stable exit-code scheme for `glam run` (issue #23):
+ *   0 done · 1 error · 2 usage error · 3 budget/step ceiling · 130 interrupted.
+ * A budget stop must be distinguishable from `done` by scripts/CI — a run that
+ * hit its ceiling is NOT a success exit.
+ */
+export function exitCodeForStatus(status) {
+  switch (status) {
+    case 'error':
+      return 1;
+    case 'budget_exhausted':
+      return 3;
+    case 'interrupted':
+      return 130; // 128 + SIGINT, the unix convention
+    default:
+      return 0; // done
+  }
+}
+
+/**
+ * The run-header provider/model line (issue #24): show the provider actually
+ * serving the model and the model family from the catalog — never the shared
+ * adapter's internal id (a DeepSeek run must not read "fireworks-glm").
+ */
+export function providerModelHeader(adapter, modelId) {
+  const provider = adapter?.provider ?? providerFromAdapterId(adapter?.id);
+  const family = catalogEntry(provider, modelId)?.model;
+  const model = family && family !== modelId ? `${family} (${modelId})` : modelId;
+  return `  provider: ${provider}   model: ${model}\n`;
 }
 
 export async function cmdRun(argv, { version }) {
@@ -255,7 +303,8 @@ export async function cmdRun(argv, { version }) {
     `${color(useColorOut, FLAME, `glamfire ${version}`)} ${color(useColorOut, DIM, '· run')}\n`,
   );
   const chosenModel = decision ? decision.selection.chosen.id : config.model;
-  out.write(`  adapter: ${adapter.id}   model: ${chosenModel}\n`);
+  const chosenAdapter = decision ? decision.selection.chosen.adapter : adapter;
+  out.write(providerModelHeader(chosenAdapter, chosenModel));
   if (decision) {
     const c = decision.classification;
     out.write(
@@ -354,7 +403,7 @@ export async function cmdRun(argv, { version }) {
   const total = u.inputTokens + u.outputTokens;
   out.write(`\n${color(useColorOut, DIM, '──')}\n`);
   if (run.status === 'budget_exhausted') {
-    out.write(color(useColorOut, BOLD, 'stopped: budget/step ceiling reached\n'));
+    out.write(color(useColorOut, BOLD, 'stopped: budget/step ceiling reached (exit 3)\n'));
   } else if (run.status === 'interrupted') {
     out.write(color(useColorOut, BOLD, 'stopped: interrupted by Ctrl-C\n'));
     out.write(
@@ -380,7 +429,9 @@ export async function cmdRun(argv, { version }) {
   try {
     const record = buildRunRecord({ run, durationMs: Date.now() - startedAt, version });
     const ledgerFile = appendRecord(record);
-    out.write(color(useColor, DIM, `recorded to ${ledgerFile} — see \`glam usage\`\n`));
+    // `useColorOut` (the resolved boolean), not the imported `useColor` function:
+    // the function is always truthy, which forced ANSI into piped output.
+    out.write(color(useColorOut, DIM, `recorded to ${ledgerFile} — see \`glam usage\`\n`));
     // Monthly budget alerting (config [usage]): warn when this run pushed
     // month-to-date spend over warnAtPct% (or past 100%) of monthlyBudgetUsd.
     const { records } = readLedger({});
@@ -391,7 +442,9 @@ export async function cmdRun(argv, { version }) {
         budgetState.level === 'over'
           ? `monthly budget EXCEEDED: ${fmtUSD(budgetState.spentUsd)} of ${fmtUSD(budgetState.budgetUsd)} (${pct}%)`
           : `monthly budget warning: ${fmtUSD(budgetState.spentUsd)} of ${fmtUSD(budgetState.budgetUsd)} (${pct}%, warn at ${budgetState.warnAtPct}%)`;
-      process.stderr.write(`${color(useColor, BOLD, `glam run: ${line}`)}\n`);
+      // NOTE: `useColorOut`, not the `useColor` function — passing the function
+      // (always truthy) forced ANSI codes into piped output (fixed with #23/#24).
+      process.stderr.write(`${color(useColorOut, BOLD, `glam run: ${line}`)}\n`);
     }
   } catch (err) {
     process.stderr.write(`glam run: warning: could not record usage: ${err.message}\n`);
@@ -403,6 +456,7 @@ export async function cmdRun(argv, { version }) {
     );
   }
 
-  // Exit codes: 0 done/budget ceiling, 1 engine error, 130 user interrupt (128+SIGINT).
-  process.exitCode = run.status === 'error' ? 1 : run.status === 'interrupted' ? 130 : 0;
+  // The documented scheme (issue #23): 0 done, 1 error, 2 usage (set at parse
+  // time above), 3 budget/step ceiling, 130 interrupted (128+SIGINT).
+  process.exitCode = exitCodeForStatus(run.status);
 }

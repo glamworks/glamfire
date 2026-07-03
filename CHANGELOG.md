@@ -4,6 +4,21 @@ All notable changes to this project are documented here. Based on the real git
 history; newest versions first. This project adheres to
 [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+- **feat(cli): BEHAVIOR CHANGE —** a run stopped by a budget/step/token ceiling now
+  exits **3** instead of 0, so scripts and CI can tell a budget stop from `done`
+  without parsing output. The documented, stable scheme (`glam help` /
+  `glam run --help`): 0 done · 1 error · 2 usage error · 3 budget/step ceiling ·
+  130 interrupted (128+SIGINT). (#23)
+- **fix(cli):** the run header now shows the serving **provider and model family**
+  (e.g. `provider: fireworks   model: deepseek-v4-flash (…)`) instead of leaking the
+  shared adapter's internal id (`adapter: fireworks-glm`) on DeepSeek runs; adapters
+  now declare a stable `provider` id alongside their adapter id. (#24)
+- **fix(cli):** the `recorded to …` ledger line and the monthly-budget alert passed
+  the `useColor` *function* (always truthy) instead of the resolved boolean, forcing
+  raw ANSI codes into piped `glam run` output. Found while verifying #23.
+
 ## v0.4.1
 
 - **fix(scripts):** `version.mjs` main-module guard used naive `file://` string
