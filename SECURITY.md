@@ -26,4 +26,4 @@ you updated through remediation. Coordinated disclosure; we credit reporters who
 
 ## Supported versions
 
-During the foundation stage, the latest tagged release receives security fixes.
+While glamfire is pre‑1.0, the latest tagged release receives security fixes.
