@@ -155,8 +155,9 @@ dispatch through the permission gate (`[allow]`), streamed output, and an exact 
 line — a third of a cent. Add `--explain` for the router's full reasoning inline.
 `glam run` has the same tools a coding agent needs — read/write/edit files, glob,
 grep, read-only git — so "write a CHANGELOG.md from the git history" works exactly
-like it reads (glamfire's own [CHANGELOG](../CHANGELOG.md) was written that way;
-the run cost about a cent). Writes ask before touching disk; `run_command` is
+like it reads (glamfire's own [CHANGELOG](../CHANGELOG.md) was authored that way and
+merged with human review; a faithful re-run of the task costs about two cents).
+Writes ask before touching disk; `run_command` is
 deny-by-default and opt-in via `--allow-exec`.
 
 ## Thing 2 — Put a real ceiling on an agent
@@ -308,7 +309,10 @@ candidates = [
 ```
 
 Candidates are ordered cheapest-first; the router filters by capability and budget and
-picks the cheapest survivor. Watch the decision change — still offline, still no key:
+picks the cheapest survivor. Note the rule matches **center**-scored tasks; an
+edge-scored prompt (a gnarly refactor, say) falls through to your other rules — add a
+second rule with `distribution = "edge"` if you want the drill to cover those too.
+Watch the decision change — still offline, still no key:
 
 ```console
 $ glam route "Summarize this paragraph in one sentence."
