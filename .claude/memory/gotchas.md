@@ -52,3 +52,8 @@ them the hard way.
   specified` in Node — don't use it. `scripts/bump-version.mjs` writing package.json via
   raw `JSON.stringify` expands `workspaces` to multiline which Biome rejects → bump script
   now runs `biome format` on it.
+- **Windows main-module guard (fixed v0.4.1):** `import.meta.url === `` `file://${process.argv[1]}` ``
+  never matches on Windows (backslashes + `file:///D:/` drive form) — the "run as CLI"
+  branch of `scripts/version.mjs` silently printed nothing there, first surfaced by the
+  doctor install-check regression test executing the script on Windows CI. ALWAYS write
+  main-module checks as `import.meta.url === pathToFileURL(process.argv[1]).href`.
