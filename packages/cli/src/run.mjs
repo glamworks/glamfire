@@ -14,6 +14,7 @@ import { PolicyError, explainDecision } from '@glamfire/router';
 import { appendRecord, budgetStatus, buildRunRecord, readLedger } from './ledger.mjs';
 import { buildModelRegistry, buildRouter } from './router.mjs';
 import { CODES, color, useColor } from './ui.mjs';
+import { getHistoricalSignalContext, appendRoutingHistory } from './ledger.mjs';
 
 const { DIM, BOLD, FLAME, YELLOW } = CODES;
 
@@ -238,7 +239,16 @@ export async function cmdRun(argv, { version }) {
   if (opts.model === undefined) {
     try {
       const registry = buildModelRegistry(glamConfig, process.env);
-      router = buildRouter(glamConfig, registry);
+      // 🔹 ADDED: Pull historical similarity match matrices completely offline
+      const historyContext = await getHistoricalSignalContext(task);
+      const routerSignals = historyContext ? { history: historyContext } : undefined;
+      // Update buildRouter to accept hooks and signals (we'll ensure router.mjs forwards these)
+      router = buildRouter(glamConfig, registry, {
+        signals: routerSignals,
+        onTaskComplete: async (record) => {
+          await appendRoutingHistory(record);
+        }
+      });
       decision = router.decide(task); // pure preview for the header/--explain
     } catch (err) {
       if (err instanceof PolicyError) {
