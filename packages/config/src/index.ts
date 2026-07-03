@@ -7,8 +7,11 @@ export { Secret, isSecret } from './secret.js';
 export { readKeychain, type KeychainRef } from './keychain.js';
 export {
   CONFIG_SCHEMA_VERSION,
+  FIREWORKS_DEEPSEEK_FLASH_MODEL,
+  FIREWORKS_DEEPSEEK_PRO_MODEL,
   FIREWORKS_DEFAULT_BASE_URL,
   GLM_DEFAULT_MODEL,
+  TOGETHER_DEEPSEEK_MODEL,
   TOGETHER_DEFAULT_BASE_URL,
   TOGETHER_GLM_MODEL,
   TOGETHER_QWEN_MODEL,

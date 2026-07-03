@@ -7,8 +7,11 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  FIREWORKS_DEEPSEEK_FLASH_MODEL,
+  FIREWORKS_DEEPSEEK_PRO_MODEL,
   type FireworksConfig,
   createFireworksGlmAdapter,
+  fireworksModelInfo,
   fireworksWireServiceTier,
   parseSSE,
   reduceStream,
@@ -253,6 +256,96 @@ describe('service_tier: internal -> Fireworks wire translation', () => {
     const state = minimalState('background');
     const body = adapter.encodeRequest(state).body as Record<string, unknown>;
     expect(body.service_tier).toBe('flex');
+  });
+});
+
+describe('per-model table: DeepSeek-V4 on Fireworks (research/25)', () => {
+  const proConfig = resolveFireworksConfig(
+    { FIREWORKS_API_KEY: 'test-key' },
+    { model: FIREWORKS_DEEPSEEK_PRO_MODEL },
+  );
+  const flashConfig = resolveFireworksConfig(
+    { FIREWORKS_API_KEY: 'test-key' },
+    { model: FIREWORKS_DEEPSEEK_FLASH_MODEL },
+  );
+
+  it('declares the live-verified DeepSeek capability surface (1M ctx, tools, FP8)', () => {
+    for (const cfg of [proConfig, flashConfig]) {
+      const adapter = createFireworksGlmAdapter(cfg);
+      expect(adapter.capabilities.contextWindow).toBe(1_048_576);
+      expect(adapter.capabilities.toolCalling).toBe(true);
+      expect(adapter.capabilities.parallelToolCalls).toBe(true);
+      expect(adapter.quantization).toBe('FP8');
+      expect(adapter.modelInfo.thinking).toBe(true);
+    }
+  });
+
+  it('prices DeepSeek-V4-Pro from the Fireworks serverless table ($1.74/$0.145/$3.48)', () => {
+    const adapter = createFireworksGlmAdapter(proConfig); // standard tier
+    const usage: Usage = {
+      inputTokens: 1_000_000,
+      cachedInputTokens: 250_000,
+      outputTokens: 100_000,
+    };
+    const expected = (750_000 * 1.74 + 250_000 * 0.145 + 100_000 * 3.48) / 1_000_000;
+    expect(adapter.pricing(usage)).toBeCloseTo(expected, 10);
+  });
+
+  it('prices DeepSeek-V4-Flash as the budget tier ($0.14/$0.028/$0.28), 10x under GLM', () => {
+    const flash = createFireworksGlmAdapter(flashConfig);
+    const glm = createFireworksGlmAdapter(config);
+    const usage: Usage = { inputTokens: 1000, cachedInputTokens: 0, outputTokens: 1000 };
+    expect(flash.pricing(usage)).toBeCloseTo((1000 * 0.14 + 1000 * 0.28) / 1_000_000, 12);
+    expect(flash.pricing(usage) * 10 < glm.pricing(usage)).toBe(true);
+  });
+
+  it('sends reasoning_effort for DeepSeek (thinking model, verified live)', () => {
+    const adapter = createFireworksGlmAdapter(proConfig);
+    const body = adapter.encodeRequest({
+      system: 'You are glamfire.',
+      task: { goal: 'compute', budget: {} },
+      messages: [{ role: 'user', content: 'hi' }],
+      tools: [],
+      config: { model: FIREWORKS_DEEPSEEK_PRO_MODEL, reasoningEffort: 'high' },
+    }).body as Record<string, unknown>;
+    expect(body.reasoning_effort).toBe('high');
+    expect(body.model).toBe(FIREWORKS_DEEPSEEK_PRO_MODEL);
+  });
+
+  it('decodes the LIVE-captured DeepSeek-V4-Pro tool-call completion', () => {
+    const adapter = createFireworksGlmAdapter(proConfig);
+    const result = adapter.decodeResponse(
+      JSON.parse(fixture('deepseek-pro-completion-toolcall.json')),
+    );
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls[0].name).toBe('calculator');
+    expect(result.toolCalls[0].arguments).toEqual({ expression: '(2 + 3) * 4' });
+    expect(result.finishReason).toBe('tool_calls');
+    expect(result.reasoning.length).toBeGreaterThan(0); // thinking model, real trace
+  });
+
+  it('fails loud for a Fireworks model with no verified entry (no faked pricing)', () => {
+    const c = resolveFireworksConfig(
+      { FIREWORKS_API_KEY: 'test-key' },
+      { model: 'accounts/fireworks/models/made-up' },
+    );
+    expect(() => createFireworksGlmAdapter(c)).toThrow(/unsupported Fireworks model/);
+    expect(() => fireworksModelInfo('nope')).toThrow(/unsupported Fireworks model "nope"/);
+  });
+
+  it('fails loud when asked for a tier Fireworks does not offer for Flash', () => {
+    // Fireworks lists NO Priority tier for DeepSeek-V4-Flash; the adapter must
+    // refuse rather than bill an invented rate.
+    const c = resolveFireworksConfig(
+      { FIREWORKS_API_KEY: 'test-key' },
+      { model: FIREWORKS_DEEPSEEK_FLASH_MODEL, serviceTier: 'priority' },
+    );
+    expect(() => createFireworksGlmAdapter(c)).toThrow(
+      /does not offer the "priority" service tier/,
+    );
+    // ...while the offered tiers construct fine.
+    expect(() => createFireworksGlmAdapter({ ...c, serviceTier: 'standard' })).not.toThrow();
+    expect(() => createFireworksGlmAdapter({ ...c, serviceTier: 'background' })).not.toThrow();
   });
 });
 

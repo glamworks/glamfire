@@ -27,6 +27,10 @@ import { ModelRegistry, Router, descriptorFromAdapter } from '@glamfire/router';
  */
 export function buildModelRegistry(glamConfig, env, { allowDryRunKey = false } = {}) {
   const registry = new ModelRegistry();
+  // Fireworks — the workhorse provider. The default list registers GLM-5.2 (the
+  // workhorse), DeepSeek-V4-Flash (budget tier), and DeepSeek-V4-Pro (open
+  // escalation tier), all behind the same FIREWORKS_API_KEY, each with its own
+  // verified per-model capabilities + tiered pricing (research/25).
   const fireworksModels = new Set(glamConfig.providers.fireworks.models);
   // The headline default model is fireworks-served by default; include it.
   fireworksModels.add(glamConfig.model);

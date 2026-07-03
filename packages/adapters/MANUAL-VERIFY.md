@@ -140,10 +140,77 @@ node packages/adapters/scripts/capture-anthropic-fixture.mjs
 
 ```bash
 npx vitest run packages/adapters/test/conformance.test.ts
-# -> adapter conformance: fireworks-glm                          (9 cases green)
-# -> adapter conformance: together (GLM-5.2 · FP4)               (9 cases green)
-# -> adapter conformance: together (Qwen3-Coder-Next · FP8)      (9 cases green)
-# -> adapter conformance: anthropic                              (9 cases green)
+# -> adapter conformance: fireworks-glm                             (9 cases green)
+# -> adapter conformance: fireworks-glm (DeepSeek-V4-Pro · FP8)     (9 cases green)
+# -> adapter conformance: fireworks-glm (DeepSeek-V4-Flash · FP8)   (9 cases green)
+# -> adapter conformance: together (GLM-5.2 · FP4)                  (9 cases green)
+# -> adapter conformance: together (Qwen3-Coder-Next · FP8)         (9 cases green)
+# -> adapter conformance: together (DeepSeek-V4-Pro)                (9 cases green)
+# -> adapter conformance: anthropic                                 (9 cases green)
+```
+
+---
+
+# Manual verification — DeepSeek-V4 on Fireworks (LIVE-VERIFIED 2026-07-03)
+
+The `fireworks-glm` adapter serves **three** verified serverless models behind
+the same `FIREWORKS_API_KEY` (research/25):
+
+| model id                                       | quant | thinking | in / cached / out (per 1M)  |
+|------------------------------------------------|-------|----------|-----------------------------|
+| `accounts/fireworks/models/glm-5p2`            | FP8   | yes      | $1.40 / $0.14 / $4.40       |
+| `accounts/fireworks/models/deepseek-v4-flash`  | FP8   | yes      | $0.14 / $0.028 / $0.28      |
+| `accounts/fireworks/models/deepseek-v4-pro`    | FP8   | yes      | $1.74 / $0.145 / $3.48      |
+
+Both DeepSeek models were verified LIVE on 2026-07-03: real chat completions,
+real `reasoning_content` traces, real parallel tool calls (`get_weather` for
+Paris + London in one turn), `seed` accepted, 1,048,576-token context confirmed
+via the Fireworks model API. Note: Fireworks lists **no Priority tier for
+V4-Flash** — the adapter fails loud if you ask for one — and
+`GET /inference/v1/models` returns only a curated subset (Flash is absent from
+the list but serves fine).
+
+## 1. Real end-to-end run with a tool call (human-standard verification)
+
+```bash
+node packages/cli/src/index.mjs run \
+  "Use the calculator tool to compute (2 + 3) * 4, then state the result in one sentence." \
+  --model accounts/fireworks/models/deepseek-v4-pro --max-usd 0.25
+# and the budget tier:
+node packages/cli/src/index.mjs run \
+  "Use the calculator tool to compute (2 + 3) * 4, then state the result in one sentence." \
+  --model accounts/fireworks/models/deepseek-v4-flash --max-usd 0.05
+```
+
+Expect, for real: the run header showing the DeepSeek model id, a
+`→ calculator({"expression":"(2 + 3) * 4"}) [allow]` dispatch, a final answer
+mentioning `20`, and a cost line priced from the DeepSeek table (Flash runs
+cost ~10-30x less than the same run on GLM/Pro).
+
+## 2. Refresh the LIVE-captured conformance fixtures
+
+The committed `deepseek-*` fixtures are real Fireworks wire captures. Re-record
+them any time (temperature 0, seed 42, via the adapter's own encodeRequest):
+
+```bash
+node packages/adapters/scripts/capture-deepseek-fixtures.mjs pro
+node packages/adapters/scripts/capture-deepseek-fixtures.mjs flash
+```
+
+---
+
+# Manual verification — DeepSeek-V4-Pro on Together (pending TOGETHER_API_KEY)
+
+Together is the SECONDARY DeepSeek host (`deepseek-ai/DeepSeek-V4-Pro`, native
+FP4+FP8 mixed precision, **512K** ctx as served vs Fireworks' 1M, and pricier:
+$2.10 / $0.20 cached / $4.40 per 1M — research/25 §B). The adapter, per-model
+table, conformance battery (exact Together wire format), and router wiring are
+all built and green; **only the live call is pending a key**. With a key:
+
+```bash
+node packages/adapters/scripts/capture-together-fixture.mjs deepseek
+# then re-run the streamed tool-call one-liner from the Together section above
+# with TOGETHER_DEEPSEEK_MODEL, and reconcile pricing against the invoice.
 ```
 
 ---

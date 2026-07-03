@@ -6,8 +6,9 @@
 // Usage:
 //   node packages/adapters/scripts/capture-together-fixture.mjs [model] [outfile]
 //
-//   model:   "glm"  -> zai-org/GLM-5.2 (FP4, thinking)        [default]
-//            "qwen" -> Qwen/Qwen3-Coder-Next (FP8, non-thinking)
+//   model:   "glm"      -> zai-org/GLM-5.2 (FP4, thinking)        [default]
+//            "qwen"     -> Qwen/Qwen3-Coder-Next (FP8, non-thinking)
+//            "deepseek" -> deepseek-ai/DeepSeek-V4-Pro (FP4+FP8 native, thinking)
 //   outfile: defaults to test/fixtures/together-<model>-stream-live.sse.txt
 //
 // The committed fixtures (together-{glm,qwen}-stream-*.sse.txt and the *.json
@@ -22,6 +23,7 @@ import { writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  TOGETHER_DEEPSEEK_MODEL,
   TOGETHER_GLM_MODEL,
   TOGETHER_QWEN_MODEL,
   createTogetherAdapter,
@@ -33,7 +35,13 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 const which = (process.argv[2] ?? 'glm').toLowerCase();
 const model =
-  which === 'qwen' ? TOGETHER_QWEN_MODEL : which === 'glm' ? TOGETHER_GLM_MODEL : process.argv[2]; // allow passing a raw/dedicated-endpoint model id
+  which === 'qwen'
+    ? TOGETHER_QWEN_MODEL
+    : which === 'deepseek'
+      ? TOGETHER_DEEPSEEK_MODEL
+      : which === 'glm'
+        ? TOGETHER_GLM_MODEL
+        : process.argv[2]; // allow passing a raw/dedicated-endpoint model id
 const outfile = resolve(
   process.argv[3] ?? join(here, '..', 'test', 'fixtures', `together-${which}-stream-live.sse.txt`),
 );

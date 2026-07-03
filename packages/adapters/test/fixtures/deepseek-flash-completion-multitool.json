@@ -1,0 +1,39 @@
+{
+  "id": "chatcmpl-7dab3461ff104c4d82d840e6f60bb083",
+  "object": "chat.completion",
+  "created": 1783095640,
+  "model": "accounts/fireworks/models/deepseek-v4-flash",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "",
+        "reasoning_content": "The user wants weather for both Paris and London. I can call the get_weather tool for both cities in parallel since they are independent calls.",
+        "tool_calls": [
+          {
+            "index": 0,
+            "id": "chatcmpl-tool-a50c7c40fef2e545",
+            "type": "function",
+            "function": { "name": "get_weather", "arguments": "{\"city\": \"Paris\"}" },
+            "name": null
+          },
+          {
+            "index": 1,
+            "id": "chatcmpl-tool-9b678ebc871900f8",
+            "type": "function",
+            "function": { "name": "get_weather", "arguments": "{\"city\": \"London\"}" },
+            "name": null
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 311,
+    "total_tokens": 417,
+    "completion_tokens": 106,
+    "prompt_tokens_details": { "cached_tokens": 0 }
+  }
+}

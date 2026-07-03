@@ -367,7 +367,7 @@ export function validateCatalogEntry(entry: unknown): CatalogEntry {
 
 /** Stable identity of an entry within a catalog. */
 export function catalogKey(entry: Pick<CatalogEntry, 'provider' | 'endpoint'>): string {
-  return `${entry.provider} ${entry.endpoint}`;
+  return `${entry.provider}\u0000${entry.endpoint}`;
 }
 
 /** Look up an entry by provider + provider-specific model id. */

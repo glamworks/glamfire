@@ -15,6 +15,16 @@ export const CONFIG_SCHEMA_VERSION = 1;
 export const FIREWORKS_DEFAULT_BASE_URL = 'https://api.fireworks.ai/inference/v1';
 /** Fireworks model id for GLM-5.2 serverless (research/02). */
 export const GLM_DEFAULT_MODEL = 'accounts/fireworks/models/glm-5p2';
+/**
+ * DeepSeek-V4-Pro on Fireworks serverless (research/25): the open escalation
+ * tier — 1M ctx, FP8, tool calling, MIT weights. Live-verified 2026-07-03.
+ */
+export const FIREWORKS_DEEPSEEK_PRO_MODEL = 'accounts/fireworks/models/deepseek-v4-pro';
+/**
+ * DeepSeek-V4-Flash on Fireworks serverless (research/25): the budget tier —
+ * cheapest capable 1M-context model ($0.14/$0.28). Live-verified 2026-07-03.
+ */
+export const FIREWORKS_DEEPSEEK_FLASH_MODEL = 'accounts/fireworks/models/deepseek-v4-flash';
 
 /** Together AI — second OpenAI-compatible inference provider (research/23). */
 export const TOGETHER_DEFAULT_BASE_URL = 'https://api.together.xyz/v1';
@@ -22,6 +32,8 @@ export const TOGETHER_DEFAULT_BASE_URL = 'https://api.together.xyz/v1';
 export const TOGETHER_GLM_MODEL = 'zai-org/GLM-5.2';
 /** Qwen3-Coder-Next on Together — the second open-weight model, FP8 (research/23 §1). */
 export const TOGETHER_QWEN_MODEL = 'Qwen/Qwen3-Coder-Next';
+/** DeepSeek-V4-Pro on Together — secondary DeepSeek host, 512K ctx (research/25). */
+export const TOGETHER_DEEPSEEK_MODEL = 'deepseek-ai/DeepSeek-V4-Pro';
 
 // --- credential references (never an inline secret) --------------------------
 
@@ -201,7 +213,10 @@ export function builtinDefaults(): GlamConfig {
     providers: {
       fireworks: {
         baseUrl: FIREWORKS_DEFAULT_BASE_URL,
-        models: [GLM_DEFAULT_MODEL],
+        // All three ride the same FIREWORKS_API_KEY, so registering them by
+        // default adds no new credential assumption: GLM-5.2 (the workhorse),
+        // DeepSeek-V4-Flash (budget tier), DeepSeek-V4-Pro (open escalation).
+        models: [GLM_DEFAULT_MODEL, FIREWORKS_DEEPSEEK_FLASH_MODEL, FIREWORKS_DEEPSEEK_PRO_MODEL],
         credential: { env: 'FIREWORKS_API_KEY' },
       },
       // Together AI — second OpenAI-compatible provider (research/23). Wired but

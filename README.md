@@ -248,18 +248,27 @@ every release.)
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 
 **Built, one step from DONE** (all gates green; the only unverified step is the live call)
-- **Four tested adapters** behind one conformance suite: **`fireworks-glm`** (GLM 5.2/FP8,
-  the default), **`anthropic`** (Claude Messages API — edge/escalation candidate), and
-  **`together`** serving **GLM 5.2** *and* **Qwen3‑Coder‑Next** — all built on a shared
-  OpenAI‑compatible core (system shaping, native tool calling, SSE tool‑call fragment
-  reassembly, per‑model pricing/capabilities). The same **conformance battery** runs against
-  every adapter/model (a model is "supported" only when it's green). Honesty caveat: Together
-  serves GLM‑5.2 at **FP4** (a real downgrade vs Fireworks **FP8**) and Qwen3‑Coder‑Next via a
-  *dedicated* endpoint — see [`research/23`](research/23-second-model-and-provider.md). **`fireworks-glm`
-  is live‑verified** (see *Works today* above); the other two are verified against real captured
-  wire fixtures with their **live calls pending each provider's key** (`ANTHROPIC_API_KEY` /
-  `TOGETHER_API_KEY`). The router's cross‑provider escalation (cheap GLM/Qwen → frontier Claude)
-  is real, wired, and cost‑compared today.
+- **Three tested adapters, seven model configs** behind one conformance suite:
+  **`fireworks-glm`** serving **GLM 5.2** (FP8, the default workhorse), **DeepSeek‑V4‑Pro**
+  (FP8, 1M ctx, $1.74/$3.48 — the open escalation tier), and **DeepSeek‑V4‑Flash** (FP8,
+  1M ctx, $0.14/$0.28 — the cheapest capable long‑context model anywhere); **`anthropic`**
+  (Claude Messages API — frontier escalation); and **`together`** serving **GLM 5.2**,
+  **Qwen3‑Coder‑Next**, *and* **DeepSeek‑V4‑Pro** — the OpenAI‑compatible ones share one
+  core (system shaping, native tool calling, SSE tool‑call fragment reassembly, per‑model
+  pricing/capabilities). The same **conformance battery** runs against every adapter/model
+  (a model is "supported" only when it's green). Honesty caveats: Together serves GLM‑5.2 at
+  **FP4** (a real downgrade vs Fireworks **FP8**), Qwen3‑Coder‑Next via a *dedicated*
+  endpoint, and DeepSeek‑V4‑Pro at 512K ctx / higher price than Fireworks — see
+  [`research/23`](research/23-second-model-and-provider.md) and
+  [`research/25`](research/25-provider-landscape-2026-07.md). **`fireworks-glm` is
+  live‑verified for all three of its models** (GLM 5.2 and both DeepSeeks: real streamed
+  tool‑calling round‑trips + live‑captured conformance fixtures); the other two adapters are
+  verified against real captured wire fixtures with their **live calls pending each
+  provider's key** (`ANTHROPIC_API_KEY` / `TOGETHER_API_KEY`). The router's cross‑provider
+  escalation (cheap GLM/DeepSeek/Qwen → frontier Claude) is real, wired, and cost‑compared
+  today. (DeepSeek's first‑party API is cheaper still but China‑hosted — glamfire never
+  routes there by default; point `providers.local`‑style config at it explicitly if your
+  data policy allows.)
 - **Cross‑platform install without cloning** (SPEC §7): a self‑contained **`glamfire`** npm
   package (`npm i -g glamfire` → `glam`), single‑file **binaries** for macOS/Windows/Linux
   (arm64+x64, checksummed, sigstore‑signed), and **Homebrew / Scoop / winget** manifests, all

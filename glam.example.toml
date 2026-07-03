@@ -29,7 +29,15 @@ model = "accounts/fireworks/models/glm-5p2"
 # ---------------------------------------------------------------------------
 [providers.fireworks]
 baseUrl = "https://api.fireworks.ai/inference/v1"
-models = ["accounts/fireworks/models/glm-5p2"]
+# Three verified serverless models ride the same key (research/25):
+#   glm-5p2           — GLM-5.2, the default workhorse (FP8, 1M ctx, thinking)
+#   deepseek-v4-flash — budget tier: cheapest capable 1M-ctx model ($0.14/$0.28)
+#   deepseek-v4-pro   — open escalation tier (FP8, 1M ctx, $1.74/$3.48, MIT)
+models = [
+  "accounts/fireworks/models/glm-5p2",
+  "accounts/fireworks/models/deepseek-v4-flash",
+  "accounts/fireworks/models/deepseek-v4-pro",
+]
 # Resolve the key from an environment variable:
 credential = { env = "FIREWORKS_API_KEY" }
 
@@ -44,9 +52,12 @@ credential = { env = "FIREWORKS_API_KEY" }
 #     GLM only as a cheaper/secondary host.
 #   - Qwen/Qwen3-Coder-Next (FP8, 256K, non-thinking, native tool-calling) is the
 #     cheaper/faster coding-agent second tier, served via a DEDICATED endpoint.
+#   - deepseek-ai/DeepSeek-V4-Pro (native FP4+FP8, thinking) is the SECONDARY
+#     DeepSeek host — 512K ctx as served here vs Fireworks' 1M, and pricier
+#     ($2.10/$4.40 vs $1.74/$3.48). Prefer Fireworks for DeepSeek (research/25).
 # [providers.together]
 # baseUrl = "https://api.together.xyz/v1"
-# models = ["zai-org/GLM-5.2", "Qwen/Qwen3-Coder-Next"]
+# models = ["zai-org/GLM-5.2", "Qwen/Qwen3-Coder-Next", "deepseek-ai/DeepSeek-V4-Pro"]
 # credential = { env = "TOGETHER_API_KEY" }
 
 [providers.anthropic]
@@ -82,6 +93,21 @@ default = "accounts/fireworks/models/glm-5p2"
 [[routing.rules]]
 distribution = "center"
 candidates = ["accounts/fireworks/models/glm-5p2"]
+
+# DeepSeek tiering on the same Fireworks key (research/25). Candidates are
+# ordered cheapest-first; the router filters by `requires` and picks the
+# cheapest survivor, so V4-Flash ($0.14/$0.28 — the cheapest capable 1M-context
+# model) wins center work, with GLM-5.2 and DeepSeek-V4-Pro ($1.74/$3.48, the
+# open escalation tier) as stronger fallbacks. Uncomment to prefer the budget
+# tier; put this rule ABOVE the plain GLM center rule so it matches first.
+# [[routing.rules]]
+# distribution = "center"
+# requires = ["tool_calling", "long_context"]
+# candidates = [
+#   "accounts/fireworks/models/deepseek-v4-flash",
+#   "accounts/fireworks/models/glm-5p2",
+#   "accounts/fireworks/models/deepseek-v4-pro",
+# ]
 
 # Edge / low-confidence work -> escalate to a frontier model, falling back to GLM.
 [[routing.rules]]
