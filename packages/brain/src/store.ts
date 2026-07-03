@@ -2,10 +2,26 @@
 // file, zero external services on Mac/Windows/Linux. Four first-class record types with
 // provenance, hybrid retrieval (vector + keyword + recency + provenance), and a tested
 // export/import ownership invariant. No remote dependency is required to read your context.
+import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { load as loadVec } from 'sqlite-vec';
 import { chunkText, estimateTokens } from './chunk.js';
 import { type Embedder, HashEmbedder } from './embedder.js';
+import {
+  FileFormatError,
+  type IndexEntry,
+  adoptionDefaults,
+  appendLog,
+  ensureTree,
+  parseRecordFile,
+  recordRelPath,
+  scanTree,
+  serializeRecordFile,
+  sha256,
+  writeIndex,
+  writeRecordFile,
+} from './files.js';
 import {
   EXPORT_FORMAT_VERSION,
   type ExportHeader,
@@ -14,7 +30,9 @@ import {
   encodeVector,
 } from './serialize.js';
 import {
+  type ChunkOptions,
   ChunkOptionsSchema,
+  type DerivedFrom,
   type DocumentInput,
   DocumentInputSchema,
   type EpisodeInput,
@@ -31,11 +49,16 @@ import {
   type RecordType,
   type Scope,
   type ScoredChunk,
+  type Sharing,
+  type Truth,
   type UpdatePatch,
   UpdatePatchSchema,
 } from './types.js';
 
-const SCHEMA_VERSION = 1;
+// v2 adds the flat-file layer: truth/sharing/tags/derived_from columns on records
+// and the sync_state table (file path + content hash per record). v1 stores are
+// migrated in place on open.
+const SCHEMA_VERSION = 2;
 
 /** Tunable hybrid-retrieval weights. All defaults are sane and reviewable. */
 export interface HybridWeights {
@@ -69,6 +92,43 @@ export interface BrainOptions {
   embedder?: Embedder;
   /** Hybrid retrieval weights (merged over defaults). */
   weights?: Partial<HybridWeights>;
+  /**
+   * Root of the flat-file markdown tree (research/31). When set, the markdown is
+   * authoritative and every write goes through to a record file — SQLite is just
+   * the rebuildable index. When unset, the store behaves as a pure SQLite brain
+   * (the pre-flat-file behavior, still fully supported).
+   */
+  filesRoot?: string;
+}
+
+/** One reconciliation conflict, surfaced (never silently merged). */
+export interface SyncConflict {
+  id: string;
+  path: string;
+  truth: Truth;
+  /** How it was resolved: sources keep the file; summaries keep the newest side. */
+  resolution: 'file-wins' | 'db-wins';
+  /** Where the losing version was preserved. */
+  conflictPath: string;
+}
+
+/** What `syncFiles` did, in numbers a human (and the smoke test) can check. */
+export interface SyncReport {
+  /** DB-resident records exported to new markdown files (the migration path). */
+  exported: number;
+  /** New markdown files imported into the index (incl. adopted plain markdown). */
+  imported: number;
+  /** Records updated from edited files (file wins). */
+  updatedFromFiles: number;
+  /** Files rewritten from DB-side changes (write-through catch-up). */
+  updatedFromDb: number;
+  /** Records tombstoned because their file was deleted. */
+  tombstoned: number;
+  /** Files whose frontmatter could not be trusted; listed, skipped, never guessed. */
+  errors: { path: string; message: string }[];
+  conflicts: SyncConflict[];
+  /** Total records in the tree+index after the sync. */
+  records: number;
 }
 
 export interface QueryOptions {
@@ -88,10 +148,21 @@ interface RecordRow {
   title: string | null;
   content: string;
   scope: Scope;
+  truth: Truth;
+  sharing: Sharing;
+  tags: string;
+  derived_from: string;
   provenance: string;
   metadata: string;
   created_at: number;
   updated_at: number;
+}
+
+interface SyncStateRow {
+  record_id: string;
+  path: string;
+  hash: string;
+  synced_at: number;
 }
 
 interface ChunkForWrite {
@@ -105,6 +176,12 @@ function toBigInt(v: number | bigint): bigint {
 
 function vecToBytes(vec: Float32Array): Uint8Array {
   return new Uint8Array(vec.buffer, vec.byteOffset, vec.byteLength);
+}
+
+/** Chunking options for a record: `metadata.chunking` when present, else defaults. */
+function chunkOptionsFor(rec: MemoryRecord): ChunkOptions {
+  const parsed = ChunkOptionsSchema.safeParse(rec.metadata.chunking ?? {});
+  return parsed.success ? parsed.data : ChunkOptionsSchema.parse({});
 }
 
 /** Build a safe FTS5 MATCH expression from free text (OR of quoted tokens). */
@@ -122,6 +199,10 @@ function rowToRecord(row: RecordRow): MemoryRecord {
     title: row.title,
     content: row.content,
     scope: row.scope,
+    truth: row.truth,
+    sharing: row.sharing,
+    tags: JSON.parse(row.tags) as string[],
+    derivedFrom: JSON.parse(row.derived_from) as DerivedFrom[],
     provenance: JSON.parse(row.provenance) as Provenance,
     metadata: JSON.parse(row.metadata) as Record<string, unknown>,
     createdAt: row.created_at,
@@ -129,15 +210,40 @@ function rowToRecord(row: RecordRow): MemoryRecord {
   };
 }
 
+/**
+ * Fill in the flat-file fields for records from older exports/stores. Additive and
+ * lossless: old JSONL exports import unchanged, gaining safe defaults
+ * (`truth: source` unless derived, `sharing: personal` — nothing becomes team-shared
+ * by omission).
+ */
+function normalizeRecord(rec: MemoryRecord): MemoryRecord {
+  const derivedFrom = rec.derivedFrom ?? [];
+  return {
+    ...rec,
+    truth: rec.truth ?? (derivedFrom.length > 0 ? 'summary' : 'source'),
+    sharing: rec.sharing ?? 'personal',
+    tags: rec.tags ?? [],
+    derivedFrom,
+  };
+}
+
 export class Brain {
   private readonly db: Database.Database;
   readonly embedder: Embedder;
   readonly weights: HybridWeights;
+  /** Root of the authoritative markdown tree, when this brain is file-backed. */
+  readonly filesRoot: string | null;
 
-  private constructor(db: Database.Database, embedder: Embedder, weights: HybridWeights) {
+  private constructor(
+    db: Database.Database,
+    embedder: Embedder,
+    weights: HybridWeights,
+    filesRoot: string | null,
+  ) {
     this.db = db;
     this.embedder = embedder;
     this.weights = weights;
+    this.filesRoot = filesRoot;
   }
 
   /**
@@ -158,7 +264,9 @@ export class Brain {
     db.pragma('foreign_keys = ON');
     loadVec(db);
     Brain.ensureSchema(db, embedder);
-    return new Brain(db, embedder, weights);
+    const filesRoot = opts.filesRoot ?? null;
+    if (filesRoot !== null) ensureTree(filesRoot);
+    return new Brain(db, embedder, weights, filesRoot);
   }
 
   private static ensureSchema(db: Database.Database, embedder: Embedder): void {
@@ -170,6 +278,10 @@ export class Brain {
         title TEXT,
         content TEXT NOT NULL,
         scope TEXT NOT NULL,
+        truth TEXT NOT NULL DEFAULT 'source',
+        sharing TEXT NOT NULL DEFAULT 'personal',
+        tags TEXT NOT NULL DEFAULT '[]',
+        derived_from TEXT NOT NULL DEFAULT '[]',
         provenance TEXT NOT NULL,
         metadata TEXT NOT NULL,
         created_at INTEGER NOT NULL,
@@ -182,7 +294,30 @@ export class Brain {
         text TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_chunks_record ON chunks(record_id);
+      CREATE TABLE IF NOT EXISTS sync_state (
+        record_id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        hash TEXT NOT NULL,
+        synced_at INTEGER NOT NULL
+      );
     `);
+    // Migrate v1 stores in place: the new columns are additive with safe defaults.
+    const cols = new Set(
+      (db.pragma('table_info(records)') as { name: string }[]).map((c) => c.name),
+    );
+    const added: string[] = [];
+    if (!cols.has('truth'))
+      added.push("ALTER TABLE records ADD COLUMN truth TEXT NOT NULL DEFAULT 'source'");
+    if (!cols.has('sharing'))
+      added.push("ALTER TABLE records ADD COLUMN sharing TEXT NOT NULL DEFAULT 'personal'");
+    if (!cols.has('tags'))
+      added.push("ALTER TABLE records ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
+    if (!cols.has('derived_from'))
+      added.push("ALTER TABLE records ADD COLUMN derived_from TEXT NOT NULL DEFAULT '[]'");
+    for (const sql of added) db.exec(sql);
+    db.prepare(
+      "INSERT INTO meta(key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    ).run(String(SCHEMA_VERSION));
     const existingDim = db.prepare("SELECT value FROM meta WHERE key = 'embedder_dim'").get() as
       | { value: string }
       | undefined;
@@ -193,7 +328,6 @@ export class Brain {
          CREATE VIRTUAL TABLE fts_chunks USING fts5(text, tokenize='porter unicode61');`,
       );
       const setMeta = db.prepare('INSERT INTO meta(key, value) VALUES (?, ?)');
-      setMeta.run('schema_version', String(SCHEMA_VERSION));
       setMeta.run('embedder_id', embedder.id);
       setMeta.run('embedder_dim', String(embedder.dim));
       setMeta.run('created_at', String(Date.now()));
@@ -218,8 +352,10 @@ export class Brain {
   /** Persist a record plus its embedded chunks atomically. */
   private writeRecord(rec: MemoryRecord, chunks: ChunkForWrite[]): void {
     const insRecord = this.db.prepare(
-      `INSERT INTO records(id, type, title, content, scope, provenance, metadata, created_at, updated_at)
-       VALUES (@id, @type, @title, @content, @scope, @provenance, @metadata, @created_at, @updated_at)`,
+      `INSERT INTO records(id, type, title, content, scope, truth, sharing, tags, derived_from,
+                           provenance, metadata, created_at, updated_at)
+       VALUES (@id, @type, @title, @content, @scope, @truth, @sharing, @tags, @derived_from,
+               @provenance, @metadata, @created_at, @updated_at)`,
     );
     const insChunk = this.db.prepare(
       'INSERT INTO chunks(record_id, ordinal, text) VALUES (?, ?, ?)',
@@ -233,6 +369,10 @@ export class Brain {
         title: rec.title,
         content: rec.content,
         scope: rec.scope,
+        truth: rec.truth,
+        sharing: rec.sharing,
+        tags: JSON.stringify(rec.tags),
+        derived_from: JSON.stringify(rec.derivedFrom),
         provenance: JSON.stringify(rec.provenance),
         metadata: JSON.stringify(rec.metadata),
         created_at: rec.createdAt,
@@ -246,6 +386,63 @@ export class Brain {
       });
     });
     tx();
+  }
+
+  // --- flat-file write-through + sync-state bookkeeping --------------------------
+
+  /** Read the sync-state row (file path + hash at last sync) for a record. */
+  private syncStateFor(id: string): SyncStateRow | undefined {
+    return this.db.prepare('SELECT * FROM sync_state WHERE record_id = ?').get(id) as
+      | SyncStateRow
+      | undefined;
+  }
+
+  private setSyncState(id: string, path: string, hash: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO sync_state(record_id, path, hash, synced_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(record_id) DO UPDATE SET path = excluded.path, hash = excluded.hash,
+           synced_at = excluded.synced_at`,
+      )
+      .run(id, path, hash, Date.now());
+  }
+
+  private clearSyncState(id: string): void {
+    this.db.prepare('DELETE FROM sync_state WHERE record_id = ?').run(id);
+  }
+
+  /**
+   * Write a record's markdown file (the durable, authoritative half) after a DB
+   * write. Keeps the file path stable across edits: an existing sync-state path
+   * wins over the recomputed slug so human-visible filenames never churn.
+   */
+  private writeThrough(rec: MemoryRecord): void {
+    if (this.filesRoot === null) return;
+    const relPath = this.syncStateFor(rec.id)?.path ?? recordRelPath(rec);
+    const { hash } = writeRecordFile(this.filesRoot, relPath, rec);
+    this.setSyncState(rec.id, relPath, hash);
+  }
+
+  private removeThrough(id: string): void {
+    if (this.filesRoot === null) return;
+    const state = this.syncStateFor(id);
+    if (state !== undefined) {
+      rmSync(join(this.filesRoot, state.path), { force: true });
+      this.clearSyncState(id);
+    }
+  }
+
+  /**
+   * Fill missing `derivedFrom.hash` values from sources present in this store, so
+   * summaries carry a verifiable link to the exact source content they were derived
+   * from (`glam brain lint` uses it to flag stale summaries).
+   */
+  private resolveDerivedHashes(derivedFrom: DerivedFrom[]): DerivedFrom[] {
+    return derivedFrom.map((d) => {
+      if (d.hash !== undefined) return d;
+      const source = this.get(d.id);
+      return source === null ? d : { ...d, hash: sha256(source.content) };
+    });
   }
 
   private async embedChunks(texts: string[]): Promise<ChunkForWrite[]> {
@@ -269,17 +466,26 @@ export class Brain {
       title?: string | undefined;
       content: string;
       scope: Scope;
+      truth?: Truth | undefined;
+      sharing: Sharing;
+      tags: string[];
+      derivedFrom: DerivedFrom[];
       provenance: Provenance;
       metadata: Record<string, unknown>;
     },
   ): MemoryRecord {
     const now = Date.now();
+    const derivedFrom = this.resolveDerivedHashes(parsed.derivedFrom);
     return {
       id: parsed.id ?? crypto.randomUUID(),
       type,
       title: parsed.title ?? null,
       content: parsed.content,
       scope: parsed.scope,
+      truth: parsed.truth ?? (derivedFrom.length > 0 ? 'summary' : 'source'),
+      sharing: parsed.sharing,
+      tags: parsed.tags,
+      derivedFrom,
       provenance: parsed.provenance,
       metadata: parsed.metadata,
       createdAt: now,
@@ -293,18 +499,23 @@ export class Brain {
     const rec = this.buildRecord('fact', p);
     const chunks = await this.embedChunks([rec.content]);
     this.writeRecord(rec, chunks);
+    this.writeThrough(rec);
     return rec;
   }
 
   /** Ingest a document: chunked, each chunk embedded and retrievable, attributed to the parent. */
   async addDocument(input: DocumentInput): Promise<MemoryRecord> {
     const p = DocumentInputSchema.parse(input);
-    const rec = this.buildRecord('document', p);
-    const chunkOpts = ChunkOptionsSchema.parse(p.chunking ?? {});
-    const texts = chunkText(rec.content, chunkOpts);
+    // Persist non-default chunking in metadata so a rebuild from markdown re-chunks
+    // the same way (the flat-file tree stores content, not chunk boundaries).
+    const metadata =
+      p.chunking !== undefined ? { ...p.metadata, chunking: p.chunking } : p.metadata;
+    const rec = this.buildRecord('document', { ...p, metadata });
+    const texts = chunkText(rec.content, chunkOptionsFor(rec));
     if (texts.length === 0) throw new Error('document produced no chunks');
     const chunks = await this.embedChunks(texts);
     this.writeRecord(rec, chunks);
+    this.writeThrough(rec);
     return rec;
   }
 
@@ -314,6 +525,7 @@ export class Brain {
     const rec = this.buildRecord('episode', p);
     const chunks = await this.embedChunks([rec.content]);
     this.writeRecord(rec, chunks);
+    this.writeThrough(rec);
     return rec;
   }
 
@@ -324,17 +536,41 @@ export class Brain {
     const metadata = { ...p.metadata, target: p.target };
     const provenance: Provenance =
       p.provenance.uri === undefined ? { ...p.provenance, uri: p.target } : p.provenance;
-    const rec = this.buildRecord('pointer', {
-      id: p.id,
-      title: p.title,
-      content,
-      scope: p.scope,
-      provenance,
-      metadata,
-    });
+    const rec = this.buildRecord('pointer', { ...p, content, provenance, metadata });
     const chunks = await this.embedChunks([rec.content]);
     this.writeRecord(rec, chunks);
+    this.writeThrough(rec);
     return rec;
+  }
+
+  /**
+   * The generic writer for external sources (migration imports, Claude Code
+   * adoption, team pulls): upsert one complete record — id, provenance, and
+   * timestamps preserved exactly — replacing any existing version, re-chunking and
+   * re-embedding its content, and writing through to the markdown tree.
+   */
+  async upsert(record: MemoryRecord): Promise<MemoryRecord> {
+    const rec = normalizeRecord(record);
+    ProvenanceSchema.parse(rec.provenance);
+    await this.reindexRecord(rec);
+    this.writeThrough(rec);
+    return rec;
+  }
+
+  /** (Re)index one complete record: replace any existing row, re-chunk, re-embed. */
+  private async reindexRecord(rec: MemoryRecord): Promise<void> {
+    const texts =
+      rec.type === 'document' ? chunkText(rec.content, chunkOptionsFor(rec)) : [rec.content];
+    if (texts.length === 0) throw new Error('record produced no chunks');
+    const chunks = await this.embedChunks(texts);
+    const tx = this.db.transaction(() => {
+      if (this.get(rec.id) !== null) {
+        this.deleteChunks(rec.id);
+        this.db.prepare('DELETE FROM records WHERE id = ?').run(rec.id);
+      }
+    });
+    tx();
+    this.writeRecord(rec, chunks);
   }
 
   /** Fetch a record by id. */
@@ -356,6 +592,14 @@ export class Brain {
     if (filter.scope) {
       clauses.push('scope = ?');
       params.push(filter.scope);
+    }
+    if (filter.truth) {
+      clauses.push('truth = ?');
+      params.push(filter.truth);
+    }
+    if (filter.sharing) {
+      clauses.push('sharing = ?');
+      params.push(filter.sharing);
     }
     const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
     const limit = filter.limit ? `LIMIT ${Math.max(1, Math.floor(filter.limit))}` : '';
@@ -390,7 +634,7 @@ export class Brain {
     this.db.prepare('DELETE FROM chunks WHERE record_id = ?').run(recordId);
   }
 
-  /** Delete a record and all of its chunks/vectors. Returns true if a record was removed. */
+  /** Delete a record and all of its chunks/vectors (and its markdown file). */
   delete(id: string): boolean {
     const tx = this.db.transaction(() => {
       const existing = this.db.prepare('SELECT id FROM records WHERE id = ?').get(id);
@@ -399,7 +643,9 @@ export class Brain {
       this.db.prepare('DELETE FROM records WHERE id = ?').run(id);
       return true;
     });
-    return tx() as boolean;
+    const removed = tx() as boolean;
+    if (removed) this.removeThrough(id);
+    return removed;
   }
 
   /** Update a record. Changing `content` re-chunks and re-embeds. */
@@ -413,6 +659,13 @@ export class Brain {
       title: p.title !== undefined ? p.title : current.title,
       content: p.content ?? current.content,
       scope: p.scope ?? current.scope,
+      truth: p.truth ?? current.truth,
+      sharing: p.sharing ?? current.sharing,
+      tags: p.tags ?? current.tags,
+      derivedFrom:
+        p.derivedFrom !== undefined
+          ? this.resolveDerivedHashes(p.derivedFrom)
+          : current.derivedFrom,
       provenance: p.provenance ?? current.provenance,
       metadata: p.metadata ?? current.metadata,
       updatedAt: Date.now(),
@@ -423,15 +676,14 @@ export class Brain {
     let chunks: ChunkForWrite[] | null = null;
     if (contentChanged) {
       const texts =
-        next.type === 'document'
-          ? chunkText(next.content, ChunkOptionsSchema.parse({}))
-          : [next.content];
+        next.type === 'document' ? chunkText(next.content, chunkOptionsFor(next)) : [next.content];
       chunks = await this.embedChunks(texts);
     }
     const tx = this.db.transaction(() => {
       this.db
         .prepare(
-          `UPDATE records SET title=@title, content=@content, scope=@scope,
+          `UPDATE records SET title=@title, content=@content, scope=@scope, truth=@truth,
+             sharing=@sharing, tags=@tags, derived_from=@derived_from,
              provenance=@provenance, metadata=@metadata, updated_at=@updated_at WHERE id=@id`,
         )
         .run({
@@ -439,6 +691,10 @@ export class Brain {
           title: next.title,
           content: next.content,
           scope: next.scope,
+          truth: next.truth,
+          sharing: next.sharing,
+          tags: JSON.stringify(next.tags),
+          derived_from: JSON.stringify(next.derivedFrom),
           provenance: JSON.stringify(next.provenance),
           metadata: JSON.stringify(next.metadata),
           updated_at: next.updatedAt,
@@ -459,6 +715,7 @@ export class Brain {
       }
     });
     tx();
+    this.writeThrough(next);
     return next;
   }
 
@@ -657,7 +914,9 @@ export class Brain {
       const line = lines[i];
       if (line === undefined) continue;
       const parsed = JSON.parse(line) as ExportedRecord;
-      const rec = parsed.record;
+      // Old exports predate truth/sharing/tags/derived_from: normalize with safe
+      // defaults so the JSONL round-trip invariant holds across format generations.
+      const rec = normalizeRecord(parsed.record);
       let chunks: ChunkForWrite[];
       if (regenerate) {
         chunks = await this.embedChunks(parsed.chunks.map((c) => c.text));
@@ -671,6 +930,7 @@ export class Brain {
         });
       }
       this.writeRecord(rec, chunks);
+      this.writeThrough(rec);
       imported += 1;
     }
     return { records: imported };
@@ -688,6 +948,221 @@ export class Brain {
     if (vecRow === undefined) return null;
     const buf = vecRow.embedding;
     return new Float32Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+  }
+
+  // --- flat-file sync + rebuild (research/31: markdown is the brain) -------------
+
+  /**
+   * Reconcile the markdown tree with the SQLite index (`glam brain sync`).
+   *
+   * Semantics (research/31 §5): content hashes, never mtimes, drive change
+   * detection. Files win for `truth: source` records; newest wins only for
+   * regenerable `truth: summary` records. Conflicts are surfaced — the losing
+   * version is preserved next to the file as `*.conflict.md` and logged — never
+   * silently merged. DB-resident records with no file yet are exported (the
+   * migration path); plain markdown dropped into the tree is adopted as records.
+   * Regenerates INDEX.md and appends to log.md.
+   */
+  async syncFiles(): Promise<SyncReport> {
+    const root = this.filesRoot;
+    if (root === null) {
+      throw new Error('this brain is not file-backed; open it with { filesRoot } to sync');
+    }
+    ensureTree(root);
+    const report: SyncReport = {
+      exported: 0,
+      imported: 0,
+      updatedFromFiles: 0,
+      updatedFromDb: 0,
+      tombstoned: 0,
+      errors: [],
+      conflicts: [],
+      records: 0,
+    };
+    const events: string[] = [];
+    const seen = new Set<string>();
+
+    for (const f of scanTree(root)) {
+      let parsed: ReturnType<typeof parseRecordFile>;
+      try {
+        parsed = parseRecordFile(f.text, f.relPath);
+      } catch (err) {
+        if (err instanceof FileFormatError) {
+          report.errors.push({ path: f.relPath, message: err.message });
+          events.push(`error ${err.message}`);
+          continue;
+        }
+        throw err;
+      }
+
+      // Plain markdown without frontmatter: adopt it as a record (the generic
+      // external-writer path — humans, scripts, or another agent's memory export).
+      if (parsed.kind === 'adopt') {
+        const d = adoptionDefaults(f.dir);
+        const mtime = Math.round(statSync(join(root, f.relPath)).mtimeMs);
+        const rec: MemoryRecord = {
+          id: crypto.randomUUID(),
+          type: d.type,
+          title: parsed.title,
+          content: parsed.content,
+          scope: 'private',
+          truth: d.truth,
+          sharing: 'personal',
+          tags: [],
+          derivedFrom: [],
+          provenance: { source: `file:${f.relPath.replace(/\\/g, '/')}` },
+          metadata: {},
+          createdAt: mtime,
+          updatedAt: mtime,
+        };
+        await this.reindexRecord(rec);
+        const { hash } = writeRecordFile(root, f.relPath, rec);
+        this.setSyncState(rec.id, f.relPath, hash);
+        seen.add(rec.id);
+        report.imported += 1;
+        events.push(`adopt ${f.relPath} id=${rec.id}`);
+        continue;
+      }
+
+      const fileRec = parsed.record;
+      const state = this.syncStateFor(fileRec.id);
+      // Duplicate id (two live files claiming the same record): surfaced, skipped.
+      if (state !== undefined && state.path !== f.relPath && existsSync(join(root, state.path))) {
+        const message = `${f.relPath}: duplicate id ${fileRec.id} (already at ${state.path})`;
+        report.errors.push({ path: f.relPath, message });
+        events.push(`error ${message}`);
+        continue;
+      }
+      seen.add(fileRec.id);
+      const dbRec = this.get(fileRec.id);
+      const fileHash = sha256(f.text);
+
+      if (dbRec === null) {
+        // New file (or a record the index lost): the markdown is authoritative.
+        await this.reindexRecord(fileRec);
+        const { hash } = writeRecordFile(root, f.relPath, fileRec);
+        this.setSyncState(fileRec.id, f.relPath, hash);
+        report.imported += 1;
+        events.push(`import ${f.relPath} id=${fileRec.id}`);
+        continue;
+      }
+
+      const dbHash = sha256(serializeRecordFile(dbRec));
+      const base = state?.hash;
+      const fileChanged = base === undefined ? fileHash !== dbHash : fileHash !== base;
+      const dbChanged = base === undefined ? fileHash !== dbHash : dbHash !== base;
+
+      if (!fileChanged && !dbChanged) {
+        if (state === undefined || state.path !== f.relPath) {
+          this.setSyncState(fileRec.id, f.relPath, fileHash);
+        }
+        continue;
+      }
+      if (fileChanged && !dbChanged) {
+        // File edited, index untouched since last sync → file wins.
+        const next: MemoryRecord = { ...fileRec, updatedAt: Date.now() };
+        await this.reindexRecord(next);
+        const { hash } = writeRecordFile(root, f.relPath, next);
+        this.setSyncState(next.id, f.relPath, hash);
+        report.updatedFromFiles += 1;
+        events.push(`update-from-file ${f.relPath} id=${next.id}`);
+        continue;
+      }
+      if (dbChanged && !fileChanged) {
+        // Index written without write-through (e.g. a non-file-backed writer):
+        // catch the file up.
+        const { hash } = writeRecordFile(root, f.relPath, dbRec);
+        this.setSyncState(dbRec.id, f.relPath, hash);
+        report.updatedFromDb += 1;
+        events.push(`update-from-db ${f.relPath} id=${dbRec.id}`);
+        continue;
+      }
+
+      // Both sides changed → conflict. Never silently merged.
+      const conflictPath = f.relPath.replace(/\.md$/, '.conflict.md');
+      const fileMtime = Math.round(statSync(join(root, f.relPath)).mtimeMs);
+      const fileWins =
+        fileRec.truth === 'source' || dbRec.truth === 'source'
+          ? true // human-edited source files are never overwritten
+          : fileMtime >= dbRec.updatedAt; // summaries are regenerable: newest wins
+      if (fileWins) {
+        writeRecordFile(root, conflictPath, dbRec);
+        await this.reindexRecord(fileRec);
+        const { hash } = writeRecordFile(root, f.relPath, fileRec);
+        this.setSyncState(fileRec.id, f.relPath, hash);
+      } else {
+        writeFileSync(join(root, conflictPath), f.text);
+        const { hash } = writeRecordFile(root, f.relPath, dbRec);
+        this.setSyncState(dbRec.id, f.relPath, hash);
+      }
+      const conflict: SyncConflict = {
+        id: fileRec.id,
+        path: f.relPath,
+        truth: fileRec.truth,
+        resolution: fileWins ? 'file-wins' : 'db-wins',
+        conflictPath,
+      };
+      report.conflicts.push(conflict);
+      events.push(
+        `conflict ${f.relPath} id=${fileRec.id} resolved=${conflict.resolution} loser=${conflictPath}`,
+      );
+    }
+
+    // DB records with no file: tombstone if the file was deleted, export if the
+    // record predates the flat-file tree (first-sync migration, requirement of
+    // research/31 — this is also the path external SQLite-resident data rides).
+    for (const rec of this.list()) {
+      if (seen.has(rec.id)) continue;
+      const state = this.syncStateFor(rec.id);
+      if (state !== undefined) {
+        this.delete(rec.id); // also clears sync state; file is already gone
+        report.tombstoned += 1;
+        events.push(`tombstone id=${rec.id} (${state.path} deleted)`);
+      } else {
+        this.writeThrough(rec);
+        report.exported += 1;
+        const path = this.syncStateFor(rec.id)?.path ?? recordRelPath(rec);
+        events.push(`export ${path} id=${rec.id}`);
+      }
+    }
+
+    report.records = this.regenerateIndex(root);
+    events.push(
+      `sync exported=${report.exported} imported=${report.imported} ` +
+        `updated-from-files=${report.updatedFromFiles} updated-from-db=${report.updatedFromDb} ` +
+        `tombstoned=${report.tombstoned} conflicts=${report.conflicts.length} ` +
+        `errors=${report.errors.length} records=${report.records}`,
+    );
+    appendLog(root, events);
+    return report;
+  }
+
+  /** Regenerate INDEX.md from the index; returns the record count. */
+  private regenerateIndex(root: string): number {
+    const entries: IndexEntry[] = this.list().map((rec) => ({
+      record: rec,
+      relPath: this.syncStateFor(rec.id)?.path ?? recordRelPath(rec),
+    }));
+    writeIndex(root, entries);
+    return entries.length;
+  }
+
+  /**
+   * THE flat-file invariant (research/31, tested in test/rebuild.test.ts and the
+   * smoke test): delete the SQLite file and reconstruct the entire index —
+   * records, chunks, vectors, FTS — losslessly from the markdown tree. The
+   * database is a disposable index; the markdown is the brain.
+   */
+  static async rebuildFromFiles(
+    root: string,
+    dbPath: string,
+    opts: BrainOptions = {},
+  ): Promise<{ brain: Brain; report: SyncReport }> {
+    for (const suffix of ['', '-wal', '-shm']) rmSync(`${dbPath}${suffix}`, { force: true });
+    mkdirSync(dirname(dbPath), { recursive: true });
+    const brain = Brain.open(dbPath, { ...opts, filesRoot: root });
+    const report = await brain.syncFiles();
+    return { brain, report };
   }
 
   /** Close the underlying database. */

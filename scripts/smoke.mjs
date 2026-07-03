@@ -2,7 +2,15 @@
 // Smoke test: exercise the REAL glam CLI the way a human would (SPEC §10).
 // No mocks. Spawns the actual binary and asserts real output.
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -647,6 +655,178 @@ check('glam usage fails loudly on an invalid [usage] config', () => {
       if (!text.includes('usage.warnAtPct')) throw new Error('error missing offending field');
     }
   });
+});
+
+// --- glam brain: the flat-file markdown knowledge base (issue #36) -------------
+// The markdown tree is the brain; SQLite is a rebuildable index. Drive the real
+// CLI end-to-end: create records, read the actual markdown, edit it like a human,
+// sync, then the headline invariant — delete the .sqlite and rebuild, losing
+// nothing. Fully offline (deterministic local embedder, no API key).
+
+check('glam help lists the brain command and brain --help shows the operations', () => {
+  const out = run('help');
+  if (!out.includes('brain')) throw new Error('help missing brain command');
+  const brainHelp = run('brain', '--help');
+  for (const word of ['sync', 'lint', 'rebuild', 'markdown', '--sharing', '--derived-from']) {
+    if (!brainHelp.includes(word)) throw new Error(`brain help missing "${word}"`);
+  }
+});
+
+check('glam brain: records are readable, greppable markdown; sync builds INDEX.md', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-brain-'));
+  const tree = join(dir, 'brain');
+  const runBrain = (...args) =>
+    execFileSync('node', [cli, 'brain', ...args, '--dir', tree], { encoding: 'utf8' });
+  try {
+    const out = runBrain(
+      'add',
+      'fact',
+      'The deploy window is Friday after standup.',
+      '--title',
+      'Deploy window',
+      '--tags',
+      'ops',
+      '--sharing',
+      'team',
+      '--source',
+      'wiki',
+    );
+    if (!out.includes(`glamfire ${VERSION}`)) throw new Error('brain add missing version header');
+    // The record is a real markdown file a human can cat and grep.
+    const factFile = readdirSync(join(tree, 'facts')).find((f) => f.endsWith('.md'));
+    if (!factFile) throw new Error('no markdown file written under facts/');
+    const text = readFileSync(join(tree, 'facts', factFile), 'utf8');
+    for (const want of [
+      'truth: source',
+      'sharing: team',
+      '# Deploy window',
+      'The deploy window is Friday after standup.',
+    ]) {
+      if (!text.includes(want)) throw new Error(`fact file missing "${want}"`);
+    }
+    runBrain('sync');
+    const index = readFileSync(join(tree, 'INDEX.md'), 'utf8');
+    if (!index.includes('Deploy window')) throw new Error('INDEX.md missing the record');
+    if (!readFileSync(join(tree, 'log.md'), 'utf8').includes('sync '))
+      throw new Error('log.md missing sync line');
+
+    // A human edits the file; sync picks it up (file wins for sources).
+    writeFileSync(
+      join(tree, 'facts', factFile),
+      text.replace('Friday after standup', 'Wednesday at noon'),
+    );
+    const syncOut = runBrain('sync');
+    if (!/updated-from-files 1/.test(syncOut)) throw new Error('human edit not synced');
+    const listed = JSON.parse(runBrain('list', '--json'));
+    if (!listed.records.some((r) => r.content.includes('Wednesday at noon'))) {
+      throw new Error('edited content did not reach the index');
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+check('glam brain rebuild: delete the .sqlite → the index is reconstructed losslessly', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-rebuild-'));
+  const tree = join(dir, 'brain');
+  const runBrain = (...args) =>
+    execFileSync('node', [cli, 'brain', ...args, '--dir', tree], { encoding: 'utf8' });
+  try {
+    runBrain(
+      'add',
+      'document',
+      'GLM 5.2 on Fireworks is the default workhorse model.',
+      '--title',
+      'Routing',
+      '--source',
+      'SPEC.md',
+    );
+    const doc = JSON.parse(runBrain('list', '--json')).records[0];
+    runBrain(
+      'add',
+      'note',
+      'Summary: route cheap-capable-first.',
+      '--derived-from',
+      doc.id,
+      '--source',
+      'synthesis',
+    );
+    runBrain(
+      'add',
+      'pointer',
+      '--target',
+      'https://github.com/glamworks/glamfire/issues/36',
+      '--source',
+      'github',
+    );
+    runBrain('sync');
+    const snapshot = (recs) =>
+      JSON.stringify(recs.map((r) => [r.id, r.type, r.content, r.createdAt, r.truth]).sort());
+    const before = snapshot(JSON.parse(runBrain('list', '--json')).records);
+
+    rmSync(join(tree, '.index', 'brain.sqlite')); // the catastrophe
+    const out = runBrain('rebuild');
+    if (!out.includes('nothing lost')) throw new Error('rebuild missing its report');
+    const after = snapshot(JSON.parse(runBrain('list', '--json')).records);
+    if (after !== before) throw new Error(`rebuild lost data:\n${before}\n${after}`);
+    // Retrieval works over the rebuilt index.
+    const q = JSON.parse(runBrain('query', 'default workhorse model', '--json'));
+    if (q.results.length === 0 || q.results[0].recordId !== doc.id) {
+      throw new Error('query over rebuilt index did not surface the document');
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+check('glam brain lint flags stale summaries and personal data in team records (exit 1)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-lint-'));
+  const tree = join(dir, 'brain');
+  const runBrain = (...args) =>
+    execFileSync('node', [cli, 'brain', ...args, '--dir', tree], { encoding: 'utf8' });
+  try {
+    runBrain('add', 'document', 'We deploy on Fridays.', '--title', 'Deploys', '--source', 'wiki');
+    const doc = JSON.parse(runBrain('list', '--json')).records[0];
+    runBrain(
+      'add',
+      'note',
+      'Summary: weekly deploys.',
+      '--derived-from',
+      doc.id,
+      '--source',
+      'synthesis',
+    );
+    runBrain('sync');
+    const clean = runBrain('lint');
+    if (!clean.includes('clean')) throw new Error(`expected a clean lint, got:\n${clean}`);
+
+    // The source changes and a secret lands in a team-classified record.
+    const srcFile = readdirSync(join(tree, 'sources')).find((f) => f.endsWith('.md'));
+    const srcText = readFileSync(join(tree, 'sources', srcFile), 'utf8');
+    writeFileSync(join(tree, 'sources', srcFile), srcText.replace('on Fridays', 'DAILY'));
+    runBrain('sync');
+    runBrain(
+      'add',
+      'fact',
+      'team key is sk-live-abcdef1234567890abcd',
+      '--sharing',
+      'team',
+      '--source',
+      'chat',
+    );
+    try {
+      runBrain('lint');
+      throw new Error('expected lint to exit non-zero');
+    } catch (err) {
+      if (err.status !== 1) throw new Error(`expected exit 1, got ${err.status}`);
+      const text = String(err.stdout ?? '');
+      if (!text.includes('stale-summary')) throw new Error('lint missing stale-summary finding');
+      if (!text.includes('personal-data-in-team'))
+        throw new Error('lint missing personal-data finding');
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 process.stdout.write(`\n${failures === 0 ? 'SMOKE PASS' : `SMOKE FAIL (${failures})`}\n`);
