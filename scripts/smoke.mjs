@@ -137,6 +137,17 @@ check('glam run --help shows the run usage', () => {
   if (!out.includes('run_command')) throw new Error('run help should describe run_command');
 });
 
+check('glam run --help documents the stable exit-code scheme (issue #23)', () => {
+  const out = run('run', '--help');
+  if (!out.includes('Exit codes')) throw new Error('run help missing Exit codes section');
+  if (!/3\s+budget stop/.test(out)) throw new Error('run help missing exit 3 for a budget stop');
+  if (!/130\s+interrupted/.test(out)) throw new Error('run help missing exit 130 for Ctrl-C');
+  const help = run('help');
+  if (!help.includes('3 budget/step ceiling')) {
+    throw new Error('glam help missing the exit-code summary');
+  }
+});
+
 check('glam run without a prompt exits 2', () => {
   try {
     run('run');

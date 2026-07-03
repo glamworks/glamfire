@@ -379,3 +379,28 @@ describe('config resolution', () => {
     ).toThrow(/invalid Fireworks configuration/);
   });
 });
+
+describe('provider identity (issue #24 — the run header must show the serving provider)', () => {
+  it('declares provider "fireworks", distinct from the shared adapter id', () => {
+    const adapter = createFireworksGlmAdapter(config);
+    expect(adapter.id).toBe('fireworks-glm');
+    expect(adapter.provider).toBe('fireworks');
+  });
+
+  it('keeps provider "fireworks" for DeepSeek models served through the shared adapter', () => {
+    const flash = createFireworksGlmAdapter(
+      resolveFireworksConfig(
+        { FIREWORKS_API_KEY: 'test-key' },
+        { model: FIREWORKS_DEEPSEEK_FLASH_MODEL },
+      ),
+    );
+    expect(flash.provider).toBe('fireworks');
+    const pro = createFireworksGlmAdapter(
+      resolveFireworksConfig(
+        { FIREWORKS_API_KEY: 'test-key' },
+        { model: FIREWORKS_DEEPSEEK_PRO_MODEL },
+      ),
+    );
+    expect(pro.provider).toBe('fireworks');
+  });
+});

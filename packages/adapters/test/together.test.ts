@@ -258,3 +258,10 @@ describe('config resolution', () => {
     expect(() => createTogetherAdapter(c)).toThrow(/unsupported Together model "made-up\/model"/);
   });
 });
+
+describe('provider identity (issue #24)', () => {
+  it('declares provider "together" for every served model', () => {
+    expect(createTogetherAdapter(glmConfig).provider).toBe('together');
+    expect(createTogetherAdapter(deepseekConfig).provider).toBe('together');
+  });
+});
