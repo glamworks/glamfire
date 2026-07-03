@@ -58,6 +58,8 @@ const ENV_BINDINGS: EnvBinding[] = [
   { env: 'GLAM_MAX_USD', path: ['run', 'budget', 'maxUsd'], kind: 'number' },
   { env: 'GLAM_MAX_TOKENS', path: ['run', 'budget', 'maxTokens'], kind: 'number' },
   { env: 'GLAM_MAX_STEPS', path: ['run', 'budget', 'maxSteps'], kind: 'number' },
+  { env: 'GLAM_MONTHLY_BUDGET_USD', path: ['usage', 'monthlyBudgetUsd'], kind: 'number' },
+  { env: 'GLAM_WARN_AT_PCT', path: ['usage', 'warnAtPct'], kind: 'number' },
   { env: 'FIREWORKS_BASE_URL', path: ['providers', 'fireworks', 'baseUrl'], kind: 'string' },
   { env: 'ANTHROPIC_BASE_URL', path: ['providers', 'anthropic', 'baseUrl'], kind: 'string' },
   { env: 'OPENAI_BASE_URL', path: ['providers', 'openai', 'baseUrl'], kind: 'string' },

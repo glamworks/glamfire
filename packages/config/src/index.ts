@@ -19,6 +19,7 @@ export {
   permissionsSchema,
   sandboxSchema,
   runSchema,
+  usageSchema,
   credentialRefSchema,
   capabilitySchema,
   type GlamConfig,
@@ -32,6 +33,7 @@ export {
   type PermissionsConfig,
   type SandboxConfig,
   type RunConfig,
+  type UsageConfig,
   type BudgetConfig,
   type Verdict,
 } from './schema.js';

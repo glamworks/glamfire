@@ -227,3 +227,48 @@ describe('display view (glam config) — redaction-safe', () => {
     expect(fw?.resolved).toBe(false);
   });
 });
+
+describe('usage & billing config ([usage] — the ledger budget keys)', () => {
+  it('defaults: no monthly budget (opt-in alerting), warnAtPct 80', () => {
+    const loaded = loadConfig({ cwd: project, home, env: {} });
+    expect(loaded.config.usage.monthlyBudgetUsd).toBeUndefined();
+    expect(loaded.config.usage.warnAtPct).toBe(80);
+  });
+
+  it('a project can set the monthly budget and warn threshold', () => {
+    writeProject('[usage]\nmonthlyBudgetUsd = 25.0\nwarnAtPct = 50\n');
+    const loaded = loadConfig({ cwd: project, home, env: {} });
+    expect(loaded.config.usage.monthlyBudgetUsd).toBe(25);
+    expect(loaded.config.usage.warnAtPct).toBe(50);
+    expect(loaded.provenance['usage.monthlyBudgetUsd']).toBe('project');
+  });
+
+  it('env vars GLAM_MONTHLY_BUDGET_USD / GLAM_WARN_AT_PCT bind to [usage]', () => {
+    const loaded = loadConfig({
+      cwd: project,
+      home,
+      env: { GLAM_MONTHLY_BUDGET_USD: '12.5', GLAM_WARN_AT_PCT: '90' },
+    });
+    expect(loaded.config.usage.monthlyBudgetUsd).toBe(12.5);
+    expect(loaded.config.usage.warnAtPct).toBe(90);
+    expect(loaded.provenance['usage.monthlyBudgetUsd']).toBe('env');
+  });
+
+  it('fails loud on an out-of-range warnAtPct, naming the field and file', () => {
+    writeProject('[usage]\nwarnAtPct = 150\n');
+    try {
+      loadConfig({ cwd: project, home, env: {} });
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ConfigError);
+      const message = (err as ConfigError).message;
+      expect(message).toContain('usage.warnAtPct');
+      expect((err as ConfigError).file).toContain('glam.toml');
+    }
+  });
+
+  it('fails loud on a non-positive monthly budget', () => {
+    writeProject('[usage]\nmonthlyBudgetUsd = -5\n');
+    expect(() => loadConfig({ cwd: project, home, env: {} })).toThrow(/usage.monthlyBudgetUsd/);
+  });
+});

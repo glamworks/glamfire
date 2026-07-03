@@ -11,6 +11,7 @@ import { createFireworksGlmAdapter, resolveFireworksConfig } from '@glamfire/ada
 import { ConfigError, loadConfig } from '@glamfire/config';
 import { builtinTools, defaultPolicy, runTask } from '@glamfire/engine';
 import { PolicyError, explainDecision } from '@glamfire/router';
+import { appendRecord, budgetStatus, buildRunRecord, readLedger } from './ledger.mjs';
 import { buildModelRegistry, buildRouter } from './router.mjs';
 
 const DIM = '\x1b[2m';
@@ -302,6 +303,7 @@ export async function cmdRun(argv, { version }) {
   };
 
   let run;
+  const startedAt = Date.now();
   try {
     run = await runTask({
       task,
@@ -337,6 +339,30 @@ export async function cmdRun(argv, { version }) {
       `(${total} total)   cost: ${fmtUSD(run.costUSD)}   ` +
       `steps: ${run.steps.length}   status: ${run.status}\n`,
   );
+
+  // --- usage ledger (monitoring, usage & billing) ---
+  // Every real run is appended to the local, owned ledger (~/.glam/usage.jsonl)
+  // so `glam usage` can show real spend. A ledger-write failure never corrupts
+  // the run result, but it is reported loudly — never swallowed.
+  try {
+    const record = buildRunRecord({ run, durationMs: Date.now() - startedAt, version });
+    const ledgerFile = appendRecord(record);
+    out.write(color(useColor, DIM, `recorded to ${ledgerFile} — see \`glam usage\`\n`));
+    // Monthly budget alerting (config [usage]): warn when this run pushed
+    // month-to-date spend over warnAtPct% (or past 100%) of monthlyBudgetUsd.
+    const { records } = readLedger({});
+    const budgetState = budgetStatus(glamConfig.usage, records);
+    if (budgetState && budgetState.level !== 'ok') {
+      const pct = budgetState.pct.toFixed(1);
+      const line =
+        budgetState.level === 'over'
+          ? `monthly budget EXCEEDED: ${fmtUSD(budgetState.spentUsd)} of ${fmtUSD(budgetState.budgetUsd)} (${pct}%)`
+          : `monthly budget warning: ${fmtUSD(budgetState.spentUsd)} of ${fmtUSD(budgetState.budgetUsd)} (${pct}%, warn at ${budgetState.warnAtPct}%)`;
+      process.stderr.write(`${color(useColor, BOLD, `glam run: ${line}`)}\n`);
+    }
+  } catch (err) {
+    process.stderr.write(`glam run: warning: could not record usage: ${err.message}\n`);
+  }
 
   if (opts.json) {
     out.write(

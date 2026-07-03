@@ -171,6 +171,8 @@ export async function runTask(opts: RunOptions): Promise<Run> {
 
     emit({
       type: 'model_turn',
+      adapter: activeAdapter.id,
+      model: activeConfig.model,
       text: result.text,
       reasoning: result.reasoning,
       toolCalls: result.toolCalls,
