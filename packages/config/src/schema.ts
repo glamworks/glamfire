@@ -157,6 +157,22 @@ export const runSchema = z.strictObject({
 });
 export type RunConfig = z.infer<typeof runSchema>;
 
+// --- usage & billing (the local usage ledger + budget alerting) ---------------
+
+/**
+ * Monitoring, usage & billing. Every real run is appended to the local, owned
+ * usage ledger (`~/.glam/usage.jsonl`); these keys control budget alerting on
+ * top of it. `glam run` warns when month-to-date spend crosses
+ * `warnAtPct` % of `monthlyBudgetUsd`, and `glam usage` renders a budget bar.
+ */
+export const usageSchema = z.strictObject({
+  /** Soft monthly spend budget in USD (alerting only — runs are never blocked). */
+  monthlyBudgetUsd: z.number().positive().optional(),
+  /** Warn when month-to-date spend crosses this percentage of the budget. */
+  warnAtPct: z.number().min(1).max(100),
+});
+export type UsageConfig = z.infer<typeof usageSchema>;
+
 // --- top level ---------------------------------------------------------------
 
 export const glamConfigSchema = z.strictObject({
@@ -169,6 +185,7 @@ export const glamConfigSchema = z.strictObject({
   permissions: permissionsSchema,
   sandbox: sandboxSchema,
   run: runSchema,
+  usage: usageSchema,
 });
 export type GlamConfig = z.infer<typeof glamConfigSchema>;
 
@@ -237,6 +254,10 @@ export function builtinDefaults(): GlamConfig {
       tier: 'standard',
       temperature: 0.2,
       budget: { maxUsd: 0.5, maxSteps: 8 },
+    },
+    usage: {
+      // No monthly budget by default (alerting is opt-in); warn at 80% once set.
+      warnAtPct: 80,
     },
   };
 }

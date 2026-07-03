@@ -555,4 +555,50 @@ describe('dogfood edit -> run loop (M1, key-independent)', () => {
       expect(r.stdout).toBe('PASS');
     }
   });
+
+  it('stamps every model_turn with the adapter+model that produced it, across escalation', async () => {
+    // Regression for the usage ledger: per-model cost attribution reads the
+    // adapter/model straight off each model_turn step, so an escalated run must
+    // carry the *new* model on the turns produced after the escalation.
+    const cheap = scriptedAdapter([turn({ text: 'weak answer', finishReason: 'stop' })]);
+    const frontier: StreamingAdapter = {
+      ...scriptedAdapter([turn({ text: 'strong answer', finishReason: 'stop' })]),
+      id: 'scripted-frontier',
+    };
+    let escalated = false;
+    const run = await runTask({
+      task: { goal: 'hard question', budget: { maxSteps: 6, maxUSD: 1 } },
+      adapter: cheap,
+      tools: new ToolRegistry(),
+      config: { model: 'cheap-1' },
+      cwd: process.cwd(),
+      router: {
+        select: () => ({ adapter: cheap, config: { model: 'cheap-1' }, reason: 'cheapest' }),
+        review: () => {
+          if (escalated) return {};
+          escalated = true;
+          return {
+            verification: { passed: false, detail: 'weak' },
+            escalation: {
+              adapter: frontier,
+              config: { model: 'frontier-1' },
+              from: 'cheap-1',
+              to: 'frontier-1',
+              trigger: 'verification failed',
+            },
+          };
+        },
+      },
+    });
+
+    expect(run.status).toBe('done');
+    const turns = run.steps.filter((s) => s.type === 'model_turn');
+    expect(turns).toHaveLength(2);
+    expect(turns[0]?.type === 'model_turn' && turns[0].model).toBe('cheap-1');
+    expect(turns[0]?.type === 'model_turn' && turns[0].adapter).toBe('scripted');
+    expect(turns[1]?.type === 'model_turn' && turns[1].model).toBe('frontier-1');
+    expect(turns[1]?.type === 'model_turn' && turns[1].adapter).toBe('scripted-frontier');
+    // Each turn carries its own usage + cost — the ledger's raw material.
+    expect(turns.every((t) => t.type === 'model_turn' && t.costUSD > 0)).toBe(true);
+  });
 });

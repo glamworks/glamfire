@@ -263,5 +263,136 @@ check('glam config fails loudly (exit 1) on invalid config', () => {
   });
 });
 
+// --- glam usage: the local usage ledger (monitoring, usage & billing) ---------
+// Fully offline: the ledger read path never needs an API key. Drive the real
+// binary against a hermetic HOME with a real seeded ~/.glam/usage.jsonl.
+
+check('glam help lists the usage command', () => {
+  const out = run('help');
+  if (!out.includes('usage')) throw new Error('help missing usage command');
+});
+
+check('glam usage --help shows the ledger usage (offline)', () => {
+  const out = run('usage', '--help');
+  if (!out.includes('glam usage')) throw new Error('missing usage header');
+  if (!out.includes('usage.jsonl')) throw new Error('help should name the ledger file');
+  if (!out.includes('--since')) throw new Error('missing --since option');
+  if (!out.includes('monthlyBudgetUsd')) throw new Error('help should document budget config');
+});
+
+check('glam usage with an empty ledger reports zero spend (no key needed)', () => {
+  withConfigFixture(({ home, cwd }) => {
+    // No FIREWORKS_API_KEY in this env: the ledger read path must not need one.
+    const out = execFileSync('node', [cli, 'usage'], { encoding: 'utf8', cwd, env: baseEnv(home) });
+    if (!out.includes(`glamfire ${VERSION}`)) throw new Error('usage header missing version');
+    if (!out.includes('No usage recorded yet')) throw new Error('empty ledger not reported');
+  });
+});
+
+check('glam usage totals a seeded ledger with per-model split and budget bar', () => {
+  withConfigFixture(({ home, projRoot, cwd }) => {
+    const now = new Date().toISOString();
+    const usage = { inputTokens: 1000, cachedInputTokens: 100, outputTokens: 500 };
+    const rec1 = {
+      v: 1,
+      ts: now,
+      provider: 'fireworks',
+      model: 'accounts/fireworks/models/glm-5p2',
+      status: 'done',
+      costUsd: 0.01,
+      usage,
+      escalations: [],
+      models: [
+        {
+          model: 'accounts/fireworks/models/glm-5p2',
+          provider: 'fireworks',
+          turns: 2,
+          costUsd: 0.01,
+          usage,
+        },
+      ],
+    };
+    const rec2 = {
+      ...rec1,
+      costUsd: 0.04,
+      escalations: [{ from: 'glm-5p2', to: 'claude-sonnet-4-5', trigger: 'verify failed' }],
+      models: [
+        {
+          model: 'accounts/fireworks/models/glm-5p2',
+          provider: 'fireworks',
+          turns: 1,
+          costUsd: 0.01,
+          usage,
+        },
+        { model: 'claude-sonnet-4-5', provider: 'anthropic', turns: 1, costUsd: 0.03, usage },
+      ],
+    };
+    writeFileSync(
+      join(home, '.glam', 'usage.jsonl'),
+      `${JSON.stringify(rec1)}\n${JSON.stringify(rec2)}\n`,
+    );
+    // Budget config: $0.05 spent of $0.10 => 50%, above a 40% warn threshold.
+    writeFileSync(
+      join(projRoot, 'glam.toml'),
+      '[usage]\nmonthlyBudgetUsd = 0.10\nwarnAtPct = 40\n',
+    );
+    const env = baseEnv(home);
+
+    const out = execFileSync('node', [cli, 'usage'], { encoding: 'utf8', cwd, env });
+    if (!out.includes(`glamfire ${VERSION}`)) throw new Error('usage header missing version');
+    if (!/runs:\s*2/.test(out)) throw new Error('run total wrong');
+    if (!out.includes('$0.0500')) throw new Error(`total cost not shown:\n${out}`);
+    if (!out.includes('by model')) throw new Error('missing by-model breakdown');
+    if (!out.includes('claude-sonnet-4-5')) throw new Error('escalated model missing from table');
+    if (!out.includes('by provider')) throw new Error('missing by-provider breakdown');
+    if (!out.includes('anthropic')) throw new Error('escalated provider missing');
+    if (!/escalations:\s*1/.test(out)) throw new Error('escalation count missing');
+    if (!out.includes('50.0%')) throw new Error('budget percentage missing');
+    if (!out.includes('warn at 40%')) throw new Error('warn threshold missing from budget bar');
+    if (!out.includes('over 40% of the monthly budget')) throw new Error('budget warning missing');
+
+    // --json: structured, machine-readable, same numbers.
+    const parsed = JSON.parse(
+      execFileSync('node', [cli, 'usage', '--json'], { encoding: 'utf8', cwd, env }),
+    );
+    if (parsed.totals.runs !== 2) throw new Error('--json run total wrong');
+    if (Math.abs(parsed.totals.costUsd - 0.05) > 1e-9) throw new Error('--json cost total wrong');
+    if (parsed.budget?.level !== 'warn') throw new Error('--json budget level should be warn');
+    const claude = parsed.byModel.find((m) => m.key === 'claude-sonnet-4-5');
+    if (!claude || Math.abs(claude.costUsd - 0.03) > 1e-9) {
+      throw new Error('--json per-model escalation cost wrong');
+    }
+
+    // --since filters out old records.
+    const old = { ...rec1, ts: '2020-01-01T00:00:00.000Z', costUsd: 99 };
+    writeFileSync(
+      join(home, '.glam', 'usage.jsonl'),
+      `${JSON.stringify(old)}\n${JSON.stringify(rec1)}\n`,
+    );
+    const since = JSON.parse(
+      execFileSync('node', [cli, 'usage', '--json', '--since', '7d'], {
+        encoding: 'utf8',
+        cwd,
+        env,
+      }),
+    );
+    if (since.totals.runs !== 1) throw new Error('--since did not filter old records');
+  });
+});
+
+check('glam usage fails loudly on an invalid [usage] config', () => {
+  withConfigFixture(({ home, projRoot, cwd }) => {
+    writeFileSync(join(projRoot, 'glam.toml'), '[usage]\nwarnAtPct = 500\n');
+    try {
+      execFileSync('node', [cli, 'usage'], { encoding: 'utf8', cwd, env: baseEnv(home) });
+      throw new Error('expected non-zero exit');
+    } catch (err) {
+      if (err.status !== 1) throw new Error(`expected exit 1, got ${err.status}`);
+      const text = String(err.stdout ?? '') + String(err.stderr ?? '');
+      if (!text.includes('usage.warnAtPct')) throw new Error('error missing offending field');
+    }
+  });
+});
+
 process.stdout.write(`\n${failures === 0 ? 'SMOKE PASS' : `SMOKE FAIL (${failures})`}\n`);
 process.exit(failures === 0 ? 0 : 1);

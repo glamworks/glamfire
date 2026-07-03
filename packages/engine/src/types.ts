@@ -92,6 +92,10 @@ interface BaseStep {
 
 export interface ModelTurnStep extends BaseStep {
   type: 'model_turn';
+  /** Adapter id that served this turn (changes mid-run on escalation). */
+  adapter: string;
+  /** Model id that produced this turn (changes mid-run on escalation). */
+  model: string;
   /** Assistant content tokens. */
   text: string;
   /** Interleaved reasoning/thinking tokens (GLM emits these by default). */

@@ -124,3 +124,15 @@ temperature = 0.2
 maxUsd = 0.5                # hard spend ceiling per run
 maxSteps = 8               # plan->act->observe loop cap
 # maxTokens = 100000
+
+# ---------------------------------------------------------------------------
+# Monitoring, usage & billing — every real run is appended to the local, owned
+# usage ledger (~/.glam/usage.jsonl; JSONL, portable, greppable). Inspect it
+# with `glam usage` (offline, no key needed). These keys add budget alerting on
+# top: `glam run` warns when month-to-date spend crosses warnAtPct% of the
+# monthly budget, and `glam usage` renders a budget bar. Alerting only — runs
+# are never blocked (per-run hard ceilings live in [run.budget]).
+# ---------------------------------------------------------------------------
+[usage]
+# monthlyBudgetUsd = 25.0   # soft monthly spend budget in USD (opt-in)
+warnAtPct = 80              # warn when month-to-date spend crosses this %

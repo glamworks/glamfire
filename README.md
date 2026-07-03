@@ -220,6 +220,17 @@ every release.)
   to green. A **self‑hosting CI gate** runs glamfire‑on‑glamfire on every push (gated on the
   `FIREWORKS_API_KEY` repo secret; skips with a clear notice, never a fake pass). Commits
   authored by glamfire are tagged with the model id. See [`docs/DOGFOODING.md`](docs/DOGFOODING.md).
+- **Monitoring, usage & billing** — **`glam usage`** + a local, owned **usage ledger**,
+  live‑verified end‑to‑end: every real `glam run` appends one record (timestamp, model,
+  provider, tokens incl. cached, USD cost, duration, status, goal hash, and — on an
+  escalated run — **per‑model cost split** read off the step log) to
+  `~/.glam/usage.jsonl` (append‑only JSONL: portable, greppable, its own export format,
+  zero native deps). `glam usage` shows totals and **by‑day / by‑model / by‑provider**
+  breakdowns with `--since` and `--json`, entirely **offline, no API key**. Opt‑in
+  **budget alerting** via config `[usage] monthlyBudgetUsd` / `warnAtPct` (zod‑strict,
+  fails loud): `glam run` warns when month‑to‑date spend crosses the threshold, and
+  `glam usage` renders a budget bar. Alerting only — per‑run **hard** ceilings remain
+  `[run.budget]`, enforced by the engine.
 - A passing **smoke test** that drives the real CLI the way a human would.
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 
