@@ -185,6 +185,42 @@ export const usageSchema = z.strictObject({
 });
 export type UsageConfig = z.infer<typeof usageSchema>;
 
+// --- serve (the router-as-proxy local gateway, `glam serve`) ------------------
+
+/** Per-client budget for the proxy (matched by the `x-glam-client` label). */
+export const serveClientBudgetSchema = z.strictObject({
+  /** Hard monthly spend stop for this client's proxy traffic, in USD. */
+  monthlyUsd: z.number().positive().optional(),
+});
+export type ServeClientBudget = z.infer<typeof serveClientBudgetSchema>;
+
+/**
+ * `glam serve` — a local Anthropic-Messages + OpenAI-chat-completions gateway
+ * that puts glamfire's meter, router, budget stops, and usage ledger under
+ * agents you already run (Claude Code, opencode, Cursor). Unlike `[usage]`
+ * (alerting only), `[serve.budgets]` values are HARD stops: an over-budget
+ * request is rejected with a clean provider-shaped error before any provider
+ * is called. The bearer token is a secret and therefore never lives here —
+ * it comes from `GLAM_SERVE_TOKEN`, `--token`, or is generated per session.
+ */
+export const serveSchema = z.strictObject({
+  /** TCP port to listen on (0 = pick an ephemeral port and print it). */
+  port: z.number().int().min(0).max(65535),
+  /** Bind address. Non-loopback binds require an explicit auth token. */
+  bind: z.string().min(1),
+  /** 'pin' sends every request to `serve.model`; 'route' asks the router per request. */
+  target: z.enum(['pin', 'route']),
+  /** Pinned target model id (defaults to the top-level `model`). */
+  model: z.string().min(1).optional(),
+  budgets: z.strictObject({
+    /** Hard monthly spend stop for ALL proxy traffic, in USD. */
+    monthlyUsd: z.number().positive().optional(),
+    /** Per-client hard stops, keyed by client label (`x-glam-client` header). */
+    clients: z.record(z.string(), serveClientBudgetSchema).default({}),
+  }),
+});
+export type ServeConfig = z.infer<typeof serveSchema>;
+
 // --- top level ---------------------------------------------------------------
 
 export const glamConfigSchema = z.strictObject({
@@ -198,6 +234,7 @@ export const glamConfigSchema = z.strictObject({
   sandbox: sandboxSchema,
   run: runSchema,
   usage: usageSchema,
+  serve: serveSchema,
 });
 export type GlamConfig = z.infer<typeof glamConfigSchema>;
 
@@ -273,6 +310,14 @@ export function builtinDefaults(): GlamConfig {
     usage: {
       // No monthly budget by default (alerting is opt-in); warn at 80% once set.
       warnAtPct: 80,
+    },
+    serve: {
+      // Loopback-only by default; a bearer token is ALWAYS required (generated
+      // per session when not configured). Budget stops are opt-in.
+      port: 4114,
+      bind: '127.0.0.1',
+      target: 'pin',
+      budgets: { clients: {} },
     },
   };
 }

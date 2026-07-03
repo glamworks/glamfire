@@ -393,6 +393,22 @@ every release.)
   fails loud): `glam run` warns when month‑to‑date spend crosses the threshold, and
   `glam usage` renders a budget bar. Alerting only — per‑run **hard** ceilings remain
   `[run.budget]`, enforced by the engine.
+- **`glam serve` — the router‑as‑proxy gateway, live‑verified with real Claude Code**
+  ([docs/PROXY.md](docs/PROXY.md)): a local endpoint speaking **both** the Anthropic
+  Messages and OpenAI chat‑completions dialects, so agents you already run (Claude
+  Code via `ANTHROPIC_BASE_URL`, opencode, Cursor, any SDK) execute on **GLM 5.2 on
+  Fireworks** (pinned, or `--route` for the cost‑aware router per request) with
+  glamfire's **exact first‑party meter, hard budget stops, and usage ledger under
+  them**. Faithful translation both ways: streaming SSE re‑framed
+  fragment‑for‑fragment, **tool‑call IDs round‑trip verbatim**, system prompts in
+  every observed form, image passthrough gated on target vision. **Hard**
+  `[serve.budgets]` stops (global + per‑client) reject over‑budget requests with a
+  clean provider‑shaped error **before any provider call**. Loopback + bearer token
+  always required; non‑loopback refuses to start without an explicit token.
+  **Observed live** (2026‑07‑03, Claude Code v2.1.200): headless `claude -p`
+  completed real multi‑turn tasks with real `Read`/`Write` tool calls through the
+  proxy on GLM‑5.2, and `glam usage` showed the exact metered spend by client —
+  $0.042 actual vs the $0.30 Claude Code estimated at Claude pricing.
 - A passing **smoke test** that drives the real CLI the way a human would.
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 

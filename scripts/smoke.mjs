@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Smoke test: exercise the REAL glam CLI the way a human would (SPEC §10).
 // No mocks. Spawns the actual binary and asserts real output.
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -572,6 +572,206 @@ check('glam usage fails loudly on an invalid [usage] config', () => {
     }
   });
 });
+
+// --- glam serve: the router-as-proxy gateway (research/32 item 4) -------------
+// Drive the REAL server over real sockets: startup banner, health, auth
+// rejection, and the hard budget stop (which by design never reaches a
+// provider, so it is fully verifiable offline). When a real FIREWORKS_API_KEY
+// is present, one REAL request flows through the proxy to GLM on Fireworks and
+// must land in the ledger — the first-party meter, live.
+
+async function checkAsync(name, fn) {
+  try {
+    await fn();
+    process.stdout.write(`  ✓ ${name}\n`);
+  } catch (err) {
+    failures += 1;
+    process.stdout.write(`  ✗ ${name}\n    ${err.message}\n`);
+  }
+}
+
+/** Spawn `glam serve` and resolve with its base URL once it is listening. */
+function startServe({ home, cwd, env, args = [] }) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn('node', [cli, 'serve', '--port', '0', ...args], {
+      cwd,
+      env: { ...baseEnv(home, env), NO_COLOR: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let out = '';
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      child.kill('SIGKILL');
+      rejectPromise(new Error(`serve did not start in time:\n${out}`));
+    }, 15000);
+    child.stdout.on('data', (chunk) => {
+      out += String(chunk);
+      const m = out.match(/listening: (http:\/\/[^\s]+)/);
+      if (m && !done) {
+        done = true;
+        clearTimeout(timer);
+        resolvePromise({ child, url: m[1], output: () => out });
+      }
+    });
+    child.stderr.on('data', (chunk) => {
+      out += String(chunk);
+    });
+    child.on('exit', () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      rejectPromise(new Error(`serve exited before listening:\n${out}`));
+    });
+  });
+}
+
+check('glam help lists the serve command', () => {
+  const out = run('help');
+  if (!out.includes('serve')) throw new Error('help missing serve command');
+});
+
+check('glam serve --help documents the Claude Code env override and budgets', () => {
+  const out = run('serve', '--help');
+  if (!out.includes('ANTHROPIC_BASE_URL')) throw new Error('missing ANTHROPIC_BASE_URL line');
+  if (!out.includes('ANTHROPIC_AUTH_TOKEN')) throw new Error('missing ANTHROPIC_AUTH_TOKEN line');
+  if (!out.includes('/v1/messages')) throw new Error('missing anthropic endpoint');
+  if (!out.includes('/v1/chat/completions')) throw new Error('missing openai endpoint');
+  if (!out.includes('[serve.budgets]')) throw new Error('missing budget config docs');
+});
+
+check('glam serve refuses a non-loopback bind without an explicit token', () => {
+  const { FIREWORKS_API_KEY: _omit, GLAM_SERVE_TOKEN: _omit2, ...env } = process.env;
+  try {
+    execFileSync('node', [cli, 'serve', '--bind', '0.0.0.0'], { encoding: 'utf8', env });
+    throw new Error('expected non-zero exit');
+  } catch (err) {
+    if (err.status !== 1) throw new Error(`expected exit 1, got ${err.status}`);
+    if (!String(err.stderr).includes('refusing to bind')) {
+      throw new Error('missing non-loopback refusal message');
+    }
+  }
+});
+
+await checkAsync(
+  'glam serve: health, version banner, auth 401, and the hard budget stop',
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-serve-'));
+    const home = join(dir, 'home');
+    mkdirSync(join(home, '.glam'), { recursive: true });
+    // Seed spend over a tiny budget: the stop path never calls a provider, so a
+    // placeholder key exercises the REAL rejection behavior end-to-end.
+    writeFileSync(
+      join(home, '.glam', 'usage.jsonl'),
+      `${JSON.stringify({ v: 1, ts: new Date().toISOString(), source: 'proxy', client: 'claude-code', provider: 'fireworks', model: 'm', costUsd: 9, usage: { inputTokens: 1, cachedInputTokens: 0, outputTokens: 1 } })}\n`,
+    );
+    writeFileSync(join(dir, 'glam.toml'), '[serve.budgets]\nmonthlyUsd = 1.0\n');
+    const started = await startServe({
+      home,
+      cwd: dir,
+      env: { FIREWORKS_API_KEY: 'smoke-offline-never-called', GLAM_SERVE_TOKEN: 'smoke-token-123' },
+    });
+    try {
+      if (!started.output().includes(`glamfire ${VERSION}`)) {
+        throw new Error('serve banner missing version');
+      }
+      const health = await (await fetch(`${started.url}/healthz`)).json();
+      if (health.glamfire !== VERSION) throw new Error('healthz missing version');
+
+      const unauth = await fetch(`${started.url}/v1/messages`, { method: 'POST', body: '{}' });
+      if (unauth.status !== 401)
+        throw new Error(`expected 401 without token, got ${unauth.status}`);
+      const unauthBody = await unauth.json();
+      if (unauthBody.error?.type !== 'authentication_error') {
+        throw new Error('401 body not anthropic-shaped');
+      }
+
+      const blocked = await fetch(`${started.url}/v1/messages`, {
+        method: 'POST',
+        headers: { authorization: 'Bearer smoke-token-123', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'x',
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      });
+      if (blocked.status !== 400)
+        throw new Error(`expected 400 budget stop, got ${blocked.status}`);
+      const blockedBody = await blocked.json();
+      if (!String(blockedBody.error?.message).includes('budget stop')) {
+        throw new Error('budget stop message missing');
+      }
+      if (!String(blockedBody.error?.message).includes('No provider was called')) {
+        throw new Error('budget stop must state no provider call happened');
+      }
+    } finally {
+      started.child.kill('SIGKILL');
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+if (process.env.FIREWORKS_API_KEY) {
+  await checkAsync(
+    'glam serve LIVE: a real request through the proxy to GLM on Fireworks is metered',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-serve-live-'));
+      const home = join(dir, 'home');
+      mkdirSync(join(home, '.glam'), { recursive: true });
+      const started = await startServe({
+        home,
+        cwd: dir,
+        env: {
+          FIREWORKS_API_KEY: process.env.FIREWORKS_API_KEY,
+          GLAM_SERVE_TOKEN: 'smoke-live-token',
+        },
+      });
+      try {
+        const res = await fetch(`${started.url}/v1/chat/completions`, {
+          method: 'POST',
+          headers: {
+            authorization: 'Bearer smoke-live-token',
+            'content-type': 'application/json',
+            'x-glam-client': 'smoke-live',
+          },
+          body: JSON.stringify({
+            model: 'any',
+            max_tokens: 512,
+            messages: [{ role: 'user', content: 'Reply with exactly: smoke-live-ok' }],
+          }),
+        });
+        if (res.status !== 200) {
+          throw new Error(`live request failed: HTTP ${res.status} ${await res.text()}`);
+        }
+        const body = await res.json();
+        const text = body.choices?.[0]?.message?.content ?? '';
+        if (!text.includes('smoke-live-ok')) throw new Error(`unexpected live reply: ${text}`);
+        const cost = Number(res.headers.get('x-glamfire-cost-usd'));
+        if (!(cost > 0)) throw new Error('missing x-glamfire-cost-usd receipt header');
+
+        const ledger = readFileSync(join(home, '.glam', 'usage.jsonl'), 'utf8')
+          .trim()
+          .split('\n');
+        const rec = JSON.parse(ledger.at(-1));
+        if (rec.source !== 'proxy' || rec.client !== 'smoke-live') {
+          throw new Error('live request not metered with client label');
+        }
+        if (!(rec.costUsd > 0) || !(rec.usage.outputTokens > 0)) {
+          throw new Error('live request metered without real usage');
+        }
+      } finally {
+        started.child.kill('SIGKILL');
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+} else {
+  process.stdout.write(
+    '  ! glam serve LIVE check SKIPPED: FIREWORKS_API_KEY not set in this environment.\n' +
+      '    The live proxy->GLM path is exercised wherever the key exists (CI runs it).\n',
+  );
+}
 
 process.stdout.write(`\n${failures === 0 ? 'SMOKE PASS' : `SMOKE FAIL (${failures})`}\n`);
 process.exit(failures === 0 ? 0 : 1);

@@ -98,6 +98,85 @@ export function buildRunRecord({ run, durationMs, version }) {
   };
 }
 
+/**
+ * Build one ledger record for a single request metered by the `glam serve`
+ * proxy (research/32 item 4: the gateway is glamfire's most accurate
+ * first-party usage meter — exact tokens, straight from the provider's usage
+ * block). Same core shape as a run record so `glam usage` aggregates both,
+ * plus proxy provenance: `source: 'proxy'`, the client label, the dialect the
+ * client spoke, and the model the client *asked* for vs the one that served.
+ */
+export function buildProxyRecord({
+  version,
+  client,
+  dialect,
+  adapter,
+  model,
+  requestedModel,
+  routed,
+  stream,
+  status,
+  durationMs,
+  usage,
+  costUsd,
+  toolCalls,
+}) {
+  const provider = providerFromAdapterId(adapter);
+  return {
+    v: LEDGER_RECORD_VERSION,
+    ts: new Date().toISOString(),
+    glamfire: version,
+    source: 'proxy',
+    client,
+    dialect,
+    adapter,
+    provider,
+    model,
+    requestedModel,
+    routed,
+    stream,
+    status,
+    durationMs: Math.max(0, Math.round(durationMs)),
+    usage,
+    costUsd,
+    toolCalls,
+    escalations: [],
+    models: [{ model, provider, adapter, turns: 1, usage, costUsd }],
+  };
+}
+
+/**
+ * Hard budget gate for the proxy (config `[serve.budgets]`). Unlike `[usage]`
+ * (alerting only), these are STOPS: when month-to-date proxy spend crosses the
+ * global `monthlyUsd`, or this client's spend crosses its per-client budget,
+ * the request must be rejected before any provider is called. Returns null
+ * when within budget, else `{ scope, budgetUsd, spentUsd, client }`.
+ */
+export function proxyBudgetGate(serveConfig, records, client, now = new Date()) {
+  const budgets = serveConfig?.budgets;
+  if (!budgets) return null;
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  let total = 0;
+  let clientTotal = 0;
+  for (const r of records) {
+    if (r.source !== 'proxy') continue;
+    const d = new Date(r.ts);
+    if (Number.isNaN(d.getTime()) || d.getFullYear() !== y || d.getMonth() !== m) continue;
+    const cost = r.costUsd ?? 0;
+    total += cost;
+    if (r.client === client) clientTotal += cost;
+  }
+  if (budgets.monthlyUsd !== undefined && total >= budgets.monthlyUsd) {
+    return { scope: 'proxy', budgetUsd: budgets.monthlyUsd, spentUsd: total, client };
+  }
+  const clientBudget = budgets.clients?.[client]?.monthlyUsd;
+  if (clientBudget !== undefined && clientTotal >= clientBudget) {
+    return { scope: 'client', budgetUsd: clientBudget, spentUsd: clientTotal, client };
+  }
+  return null;
+}
+
 /** Append one record to the ledger (creates `~/.glam/` on first use). */
 export function appendRecord(record, { home } = {}) {
   const path = ledgerPath(home);
@@ -187,6 +266,7 @@ export function aggregate(records) {
   const byDay = new Map();
   const byModel = new Map();
   const byProvider = new Map();
+  const byClient = new Map();
 
   for (const r of records) {
     totals.runs += 1;
@@ -198,6 +278,9 @@ export function aggregate(records) {
     totals.escalations += Array.isArray(r.escalations) ? r.escalations.length : 0;
 
     bump(byDay, dayKey(r.ts), r);
+    // Proxy-metered requests (`glam serve`) also break down by client label —
+    // the "which agent spent what" view (Claude Code vs opencode vs curl).
+    if (r.source === 'proxy') bump(byClient, r.client ?? 'unknown', r);
     // Model/provider breakdowns use the per-model split when present so an
     // escalated run's spend lands on each model that actually produced turns.
     const split =
@@ -219,6 +302,7 @@ export function aggregate(records) {
     byDay: [...byDay.values()].sort((a, b) => (a.key < b.key ? -1 : 1)),
     byModel: sorted(byModel),
     byProvider: sorted(byProvider),
+    byClient: sorted(byClient),
   };
 }
 

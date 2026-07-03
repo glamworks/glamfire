@@ -52,6 +52,19 @@ them the hard way.
   specified` in Node — don't use it. `scripts/bump-version.mjs` writing package.json via
   raw `JSON.stringify` expands `workspaces` to multiline which Biome rejects → bump script
   now runs `biome format` on it.
+- **Claude Code ⇄ proxy wire facts (observed live 2026-07-03, Claude Code v2.1.200,
+  `glam serve`):** (1) Claude Code sends `role:"system"` messages INSIDE the
+  `messages` array (beyond the top-level `system` field) — a strict
+  Anthropic-Messages translator 400s on its very first request; `@glamfire/proxy`
+  maps them to OpenAI system messages. (2) Auth header depends on which env var the
+  user set: `ANTHROPIC_AUTH_TOKEN` → `Authorization: Bearer …`, `ANTHROPIC_API_KEY`
+  → `x-api-key: …` — the proxy accepts the token in either. (3) Claude Code always
+  streams and calls `POST /v1/messages/count_tokens`; serve answers it with a
+  documented ~4-chars/token estimate. (4) Fireworks prompt caching is real through
+  the proxy: turn 2 of a Claude Code session showed 27k `cached_tokens`, priced at
+  the cached rate. (5) Claude Code's own `total_cost_usd` prices the model NAME it
+  requested (a Claude id) — a session it estimated at $0.30 actually cost $0.042 on
+  GLM-5.2 through the proxy; the ledger is the receipts story.
 - **Windows main-module guard (fixed v0.4.1):** `import.meta.url === `` `file://${process.argv[1]}` ``
   never matches on Windows (backslashes + `file:///D:/` drive form) — the "run as CLI"
   branch of `scripts/version.mjs` silently printed nothing there, first surfaced by the

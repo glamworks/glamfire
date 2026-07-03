@@ -171,6 +171,9 @@ export async function cmdUsage(argv, { version }) {
   table(out, 'by day', agg.byDay, useColor);
   table(out, 'by model', agg.byModel, useColor);
   table(out, 'by provider', agg.byProvider, useColor);
+  // Requests metered by the `glam serve` proxy break down by client label —
+  // which agent (Claude Code, opencode, curl, …) spent what.
+  if (agg.byClient.length > 0) table(out, 'by client (via glam serve)', agg.byClient, useColor);
 
   if (budget) {
     out.write(`budget: ${budgetBar(budget, useColor)}\n`);
