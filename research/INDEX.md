@@ -32,3 +32,5 @@ base is part of the context‑rollover survival kit (see [CLAUDE.md](../CLAUDE.m
 | 24 | [24-creator-thesis-update.md](24-creator-thesis-update.md) | Creator thesis refresh (Jun–Jul 2026): context wars, routing, receipts |
 | 25 | [25-provider-landscape-2026-07.md](25-provider-landscape-2026-07.md) | Open-weight model × US provider landscape, cited prices + registry seed (July 2026) |
 | 26 | [26-ornith.md](26-ornith.md) | Ornith-1.0 (DeepReinforce): self-scaffolding coding models; licensing, hosting, harness-swing evidence |
+| 27 | [27-dwarfstar.md](27-dwarfstar.md) | DwarfStar/DS4 (antirez): local engine for DeepSeek V4 Flash; $0-token local venue for the budget tier; adapter needs |
+| 29 | [29-capability-grounding.md](29-capability-grounding.md) | Capability-grounded routing: benchmark/pricing data sources + licensing, task→benchmark taxonomy, capability×price scorer, per-task cost estimation |
