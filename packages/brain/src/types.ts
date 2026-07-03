@@ -12,6 +12,39 @@ export const RecordTypeSchema = z.enum(['fact', 'document', 'episode', 'pointer'
 export type RecordType = z.infer<typeof RecordTypeSchema>;
 
 /**
+ * Source-vs-summary, first-class (research/31). `source` records are ground truth
+ * (ingested docs, observed facts, raw episodes); `summary` records are regenerable
+ * syntheses derived from sources and live in `notes/` in the flat-file tree.
+ */
+export const TruthSchema = z.enum(['source', 'summary']);
+export type Truth = z.infer<typeof TruthSchema>;
+
+/**
+ * Personal/team sharing classification (research/30 §5.1). `personal` records never
+ * leave the machine; `team` records are candidates for the git-shared team tree.
+ * Default is always `personal` — nothing is team-shared unless said so explicitly.
+ */
+export const SharingSchema = z.enum(['personal', 'team']);
+export type Sharing = z.infer<typeof SharingSchema>;
+
+/**
+ * A span link from a summary back to the source records it was derived from.
+ * `hash` is the sha256 (hex) of the source record's content at derivation time so
+ * `glam brain lint` can detect stale summaries; the writer fills it automatically
+ * when the source is present in the store.
+ */
+export const DerivedFromSchema = z
+  .object({
+    id: z.string().min(1, 'derived_from.id is required'),
+    /** Optional span within the source, e.g. "chunk:3" or "L10-L42". */
+    span: z.string().optional(),
+    /** sha256 hex of the source record's content at derivation time. */
+    hash: z.string().optional(),
+  })
+  .strict();
+export type DerivedFrom = z.infer<typeof DerivedFromSchema>;
+
+/**
  * Where a record came from. `source` is required: every record is attributable.
  * Retrieval always returns provenance so a human can trust (or distrust) a result.
  */
@@ -33,6 +66,10 @@ export interface MemoryRecord {
   title: string | null;
   content: string;
   scope: Scope;
+  truth: Truth;
+  sharing: Sharing;
+  tags: string[];
+  derivedFrom: DerivedFrom[];
   provenance: Provenance;
   metadata: Record<string, unknown>;
   createdAt: number; // epoch ms
@@ -43,6 +80,11 @@ const baseInput = {
   id: z.string().min(1).optional(),
   title: z.string().optional(),
   scope: ScopeSchema.default('private'),
+  /** Defaults to `summary` when `derivedFrom` is given, else `source`. */
+  truth: TruthSchema.optional(),
+  sharing: SharingSchema.default('personal'),
+  tags: z.array(z.string().min(1)).default([]),
+  derivedFrom: z.array(DerivedFromSchema).default([]),
   provenance: ProvenanceSchema,
   metadata: z.record(z.unknown()).default({}),
 };
@@ -94,6 +136,10 @@ export const UpdatePatchSchema = z
     title: z.string().nullable().optional(),
     content: z.string().min(1).optional(),
     scope: ScopeSchema.optional(),
+    truth: TruthSchema.optional(),
+    sharing: SharingSchema.optional(),
+    tags: z.array(z.string().min(1)).optional(),
+    derivedFrom: z.array(DerivedFromSchema).optional(),
     provenance: ProvenanceSchema.optional(),
     metadata: z.record(z.unknown()).optional(),
   })
@@ -104,6 +150,8 @@ export type UpdatePatch = z.infer<typeof UpdatePatchSchema>;
 export interface ListFilter {
   type?: RecordType;
   scope?: Scope;
+  truth?: Truth;
+  sharing?: Sharing;
   limit?: number;
 }
 

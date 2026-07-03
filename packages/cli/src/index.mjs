@@ -21,7 +21,17 @@ for (const s of [process.stdout, process.stderr]) {
 
 const VERSION = getVersion();
 const BANNER = `glamfire ${VERSION}  ·  the open harness for the last mile of AI`;
-const COMMANDS = ['run', 'route', 'usage', 'models', 'config', 'doctor', 'version', 'help'];
+const COMMANDS = [
+  'run',
+  'route',
+  'usage',
+  'models',
+  'brain',
+  'config',
+  'doctor',
+  'version',
+  'help',
+];
 
 const HELP = `${BANNER}
 
@@ -33,6 +43,8 @@ Commands:
   usage              Show spend/token usage from the local ledger (offline)
   models             Show the model/provider landscape: prices, quant, context
                      (--refresh pulls current prices from provider APIs)
+  brain              Your knowledge as flat markdown (add/list/query/sync/lint/rebuild);
+                     SQLite is just a rebuildable index — grep it, git it, own it
   config             Show the resolved, layered, secret-redacted configuration
   version            Print the glamfire version
   doctor             Check the local environment is ready to run glamfire
@@ -88,6 +100,10 @@ async function main(argv) {
   if (first === 'models') {
     const { cmdModels } = await import('./models.mjs');
     return cmdModels(args.slice(1), { version: VERSION });
+  }
+  if (first === 'brain') {
+    const { cmdBrain } = await import('./brain.mjs');
+    return cmdBrain(args.slice(1), { version: VERSION });
   }
 
   const kind = first.startsWith('-') ? 'option' : 'command';
