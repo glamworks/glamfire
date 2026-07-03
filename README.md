@@ -23,10 +23,10 @@
 
 Intelligence got roughly **98% cheaper**. Open models like **GLM 5.2** don't just keep
 up on the broad middle of everyday work — the routine coding task, the standard deck,
-the first‑pass copy, the familiar synthesis — they lead it, at a fraction of frontier
-cost, free to self‑host. The next useful AI product is not the one that wins a
-benchmark. It's the one that knows where your work is, what it's allowed to see, and
-what it's allowed to do.
+the first‑pass copy, the familiar synthesis — they lead it, rented by the token on
+Fireworks‑class serverless GPUs at a fraction of frontier cost. The next useful AI
+product is not the one that wins a benchmark. It's the one that knows where your work
+is, what it's allowed to see, and what it's allowed to do.
 
 So why is almost nobody switching? Because a model is a **brain in a jar**. What your
 company actually runs is the *work system* around it — the **harness**:
@@ -104,6 +104,36 @@ The difference is everything wrapped around that loop:
    `--refresh` pulls whatever providers actually publish machine‑readably (Together
    prices with a key; Fireworks availability — it publishes no machine prices, and the
    command says so instead of faking freshness) and calls out every drop it can prove.
+
+### First and foremost: Claude Code users and teams
+
+**You do not need to leave Claude Code — or your Anthropic subscription.** Use Claude
+Code exactly as you do now — with Claude, with GLM 5.2 on Fireworks AI, or with another
+model — and glamfire's job is to put **memory, knowledge, and usage‑and‑billing
+visibility around it**, in files you own. And the door swings both ways: walk away
+from Claude Code any time in the future, and your memories and knowledge are already
+up to date in glamfire — no export ceremony, no lock‑in cliff.
+
+That is the destination. Here is where each piece stands today — nothing below claims
+to work before it does:
+
+- **The owned memory/knowledge store — shipping now.** `@glamfire/brain` works
+  end‑to‑end: local SQLite + vectors on your disk, hybrid retrieval, and a tested
+  export→import round‑trip (human‑readable JSONL, bit‑exact). See
+  [Current reality](#current-reality).
+- **Usage & billing visibility — shipping now for `glam run`.** Every run lands in a
+  local ledger you own (`~/.glam/usage.jsonl`); `glam usage` breaks spend down by
+  day/model/provider, with monthly budget warnings — offline, no key.
+- **Wrapping Claude Code itself — the direction, not shipped.** Feeding that store and
+  ledger live from your Claude Code sessions is where this goes; today nothing hooks
+  into Claude Code automatically.
+- **Teams — specified, in active build.** Shared team memories (scoped by design so
+  personal data never enters the shared store), team usage + billing across all
+  providers — subscriptions *and* pay‑as‑you‑go API — and audit logs: which
+  model/provider handled every task, what code changed, what commits, which projects.
+
+glamfire targets **long‑horizon tasks and teams** — work that outlasts one session,
+one subscription, and one model.
 
 ### Why now — the two advancements underneath
 
