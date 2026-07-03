@@ -327,3 +327,54 @@ node packages/cli/src/index.mjs route "Refactor this module and add unit tests u
 # -> why: rule #0 matched; chose cheapest of 2 eligible candidate(s): Qwen/Qwen3-Coder-Next
 # -> cascade: Qwen/Qwen3-Coder-Next -> accounts/fireworks/models/glm-5p2
 ```
+
+## 4. Local / self-host adapter (Ollama) — LIVE-VERIFIED 2026-07-03
+
+Unlike the hosted adapters, the `local` adapter needs **no key** — only a
+running OpenAI-compatible server. It was verified live against a real Ollama
+daemon (v0.30.6, macOS) serving **qwen3:0.6b**, with `FIREWORKS_API_KEY`
+removed from the environment (a fully local run must need no hosted key):
+
+```bash
+ollama pull qwen3:0.6b
+cat > glam.toml << 'TOML'
+[providers.local]
+baseUrl = "http://localhost:11434/v1"
+models = ["qwen3:0.6b"]
+capabilities = ["tool_calling", "streaming"]
+TOML
+echo "The secret animal is: armadillo" > notes.txt
+env -u FIREWORKS_API_KEY node packages/cli/src/index.mjs run \
+  "Read the file notes.txt using the read_file tool and tell me which animal it mentions." \
+  --model qwen3:0.6b --yes
+```
+
+Observed output (real transcript):
+
+```
+glamfire 0.4.1 · run
+  adapter: local   model: qwen3:0.6b
+  routing: explicit --model override (router bypassed)
+  endpoint: http://localhost:11434/v1   price: $0/$0 per 1M (self-host, declared)   budget: $0.5000 / 8 steps
+
+  → read_file({"path":"notes.txt"})  [allow]
+  ← read_file ok (32 bytes)
+The file notes.txt mentions the animal **armadillo**.
+
+──
+tokens: in 3381 (cached 0) · out 481 (3862 total)   cost: $0.000000   steps: 6   status: done
+recorded to ~/.glam/usage.jsonl — see `glam usage`
+```
+
+Also verified live: the routed path (`glam run --local` selects qwen3:0.6b via
+the router at $0 with `local-only` in the header), `glam route` picking the $0
+local candidate while keeping GLM in the escalation cascade, and the loud
+`local_only` failure when only a hosted fallback exists. The conformance
+fixtures under `test/fixtures/ollama-*` are real wire captures from this same
+daemon (`scripts/capture-local-fixtures.mjs`). The smoke test re-runs the live
+tool round-trip whenever an Ollama daemon with qwen3:0.6b is present, and
+prints a LOUD skip naming exactly what was not exercised otherwise.
+
+DwarfStar/DS4 itself was **not** run (hardware floor: 96–128 GB unified memory
+for ~87 GB of weights); its catalog entry is validated by schema + the shared
+OpenAI-compatible contract and flagged unverified-live in `glam models` notes.

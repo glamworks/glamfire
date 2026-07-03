@@ -1,0 +1,43 @@
+{
+  "id": "chatcmpl-48",
+  "object": "chat.completion",
+  "created": 1783111489,
+  "model": "qwen3:0.6b",
+  "system_fingerprint": "fp_ollama",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "",
+        "reasoning": "Okay, the user wants the weather for both Paris and London using the get_weather tool. Let me check the tools provided. There's only one function, get_weather, which takes a city parameter. But the user is asking for two cities, Paris and London, and they want to call the tool once per city, in parallel.\n\nWait, the function can only take one city at a time. So I need to make two separate calls. Each call would be to get the weather for Paris first, then London. But how to structure that? The user said \"call it once per city, in parallel.\" So maybe each tool call is separate. So first, call get_weather with Paris, then get_weather with London. Then, after both are done, present the results. But the user might expect both results to be shown. Let me make sure I'm following the instructions correctly. The tools are to be called once per city, so two separate tool calls. Then, once all are done, present the information. So the answer should list both weather results.\n",
+        "tool_calls": [
+          {
+            "id": "call_xveoo7pi",
+            "index": 0,
+            "type": "function",
+            "function": {
+              "name": "get_weather",
+              "arguments": "{\"city\":\"Paris\"}"
+            }
+          },
+          {
+            "id": "call_el37c883",
+            "index": 1,
+            "type": "function",
+            "function": {
+              "name": "get_weather",
+              "arguments": "{\"city\":\"London\"}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 172,
+    "completion_tokens": 259,
+    "total_tokens": 431
+  }
+}

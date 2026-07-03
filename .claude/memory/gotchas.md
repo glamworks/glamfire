@@ -86,3 +86,21 @@ them the hard way.
   brain as an optionalDependency is an open product decision.
 - One-off vitest flake seen once on a full run, never reproduced in four re-runs
   (name not captured) — watch CI.
+- **Local adapter / Ollama fixture-capture traps (learned live 2026-07-03, issue #25):**
+  (1) qwen3:0.6b at temperature 0 will NOT call a `calculator` tool — it does the
+  arithmetic in its `reasoning` and stops (deterministic; stronger prompts don't help).
+  Use a tool the model *cannot* answer without (`get_weather`) for single-tool-call
+  fixtures; parallel weather calls DO work on 0.6b. (2) Ollama's OpenAI endpoint emits
+  thinking as `reasoning` (not `reasoning_content`) and DOES honor
+  `stream_options.include_usage`; token usage is real. (3) A cold Ollama model load can
+  exceed 3 minutes when big models occupy memory — the live smoke pre-warms with a tiny
+  completion (250s budget) before timing the real `glam run` (300s). Warm inference on
+  qwen3:0.6b is ~3s/run. (4) The `local` adapter sends NO Authorization header when no
+  key is configured (a dangling `Bearer ` confuses some servers); vLLM `--api-key` mode
+  uses GLAM_LOCAL_API_KEY. (5) `catalogEntrySchema` now rejects $0 on hosted providers
+  at the schema level; $0 is legal only for the self-host venues
+  (ollama/vllm/lmstudio/dwarfstar) — see SELF_HOST_PROVIDERS in catalog.ts. (6) The
+  conformance battery's pricing test auto-detects declared-free adapters (1M+1M tokens
+  price to $0) and then requires EVERY usage to be exactly $0. (7) DS4 byte-exact
+  tool-call ID replay is a shared battery item now — never normalize/rewrite tool_call
+  IDs when replaying history (also protects Fireworks prompt caching).

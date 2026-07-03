@@ -50,30 +50,7 @@ const keychainCredentialSchema = z.strictObject({
 export const credentialRefSchema = z.union([envCredentialSchema, keychainCredentialSchema]);
 export type CredentialRef = z.infer<typeof credentialRefSchema>;
 
-// --- providers ---------------------------------------------------------------
-
-export const providerSchema = z.strictObject({
-  /** Base URL of the provider's OpenAI-compatible (or native) endpoint. */
-  baseUrl: z.string().url(),
-  /** Known model ids served by this provider (used by the router as candidates). */
-  models: z.array(z.string().min(1)).default([]),
-  /** Where to resolve this provider's API credential from. Optional for local. */
-  credential: credentialRefSchema.optional(),
-});
-export type ProviderConfig = z.infer<typeof providerSchema>;
-
-export const providersSchema = z.strictObject({
-  fireworks: providerSchema,
-  together: providerSchema,
-  anthropic: providerSchema,
-  openai: providerSchema,
-  local: providerSchema,
-});
-export type ProvidersConfig = z.infer<typeof providersSchema>;
-/** Stable provider keys the harness ships adapters (or adapter slots) for. */
-export type ProviderName = keyof ProvidersConfig;
-
-// --- routing policy (declarative; the @glamfire/router contract) -------------
+// --- capability tokens (shared by routing rules and local capability floors) --
 
 /**
  * Capability tokens a task can require. The router filters a rule's `candidates`
@@ -90,6 +67,60 @@ export const capabilitySchema = z.enum([
   'long_context',
 ]);
 export type Capability = z.infer<typeof capabilitySchema>;
+
+// --- providers ---------------------------------------------------------------
+
+export const providerSchema = z.strictObject({
+  /** Base URL of the provider's OpenAI-compatible (or native) endpoint. */
+  baseUrl: z.string().url(),
+  /** Known model ids served by this provider (used by the router as candidates). */
+  models: z.array(z.string().min(1)).default([]),
+  /** Where to resolve this provider's API credential from. Optional for local. */
+  credential: credentialRefSchema.optional(),
+});
+export type ProviderConfig = z.infer<typeof providerSchema>;
+
+/**
+ * The local/self-host provider: any OpenAI-compatible server the user runs
+ * (Ollama, vLLM, SGLang, LM Studio, antirez's DwarfStar/DS4). Unlike hosted
+ * providers, glamfire cannot know the served model's capabilities, context
+ * window, or cost a priori — the USER declares them here, and the declarations
+ * are honest routing inputs (the capability floor): an undeclared capability is
+ * absent, never guessed. Marginal token price defaults to $0 (owned hardware);
+ * it can be overridden for internal cost attribution, never invented.
+ */
+export const localProviderSchema = providerSchema.extend({
+  /** Context-window cap in tokens for the served model (conservative default: 32768). */
+  contextWindow: z.number().int().positive().optional(),
+  /** Max output tokens per turn (default: 8192, clamped to contextWindow). */
+  maxOutputTokens: z.number().int().positive().optional(),
+  /**
+   * Capability tokens the served model actually supports. Conservative default:
+   * ["tool_calling", "streaming"] — declare more only when your server/model
+   * really provides it (this is the router's capability floor for local models).
+   */
+  capabilities: z.array(capabilitySchema).optional(),
+  /** USD per 1M input tokens (default 0 — self-host marginal price). */
+  usdPerMInput: z.number().nonnegative().optional(),
+  /** USD per 1M cached-input tokens (default 0). */
+  usdPerMCachedInput: z.number().nonnegative().optional(),
+  /** USD per 1M output tokens (default 0). */
+  usdPerMOutput: z.number().nonnegative().optional(),
+});
+export type LocalProviderConfig = z.infer<typeof localProviderSchema>;
+
+export const providersSchema = z.strictObject({
+  fireworks: providerSchema,
+  together: providerSchema,
+  anthropic: providerSchema,
+  openai: providerSchema,
+  local: localProviderSchema,
+});
+export type ProvidersConfig = z.infer<typeof providersSchema>;
+/** Stable provider keys the harness ships adapters (or adapter slots) for. */
+export type ProviderName = keyof ProvidersConfig;
+
+// --- routing policy (declarative; the @glamfire/router contract) -------------
 
 /**
  * One declarative routing rule. Match conditions are ANDed; an omitted condition
@@ -118,6 +149,14 @@ export const routingSchema = z.strictObject({
   default: z.string().min(1),
   /** Declarative rules, evaluated in order; first match wins. */
   rules: z.array(routingRuleSchema).default([]),
+  /**
+   * Restrict routing to $0 self-host models served by `providers.local`
+   * (privacy/offline mode). With this set, hosted candidates are ineligible and
+   * the router fails LOUD when no local model can satisfy a task — it never
+   * silently falls back to a hosted provider. CLI override: `glam run --local`.
+   * Absent = false (hosted and local candidates compete normally).
+   */
+  localOnly: z.boolean().optional(),
 });
 export type RoutingConfig = z.infer<typeof routingSchema>;
 
@@ -310,6 +349,7 @@ export function builtinDefaults(): GlamConfig {
       // adapter (e.g. anthropic) is wired — see glam.example.toml. We do not ship
       // a default rule that references an adapter that is not yet real.
       rules: [{ distribution: 'center', requires: [], candidates: [GLM_DEFAULT_MODEL] }],
+      localOnly: false,
     },
     permissions: {
       // Least-privilege defaults (mirror engine defaultPolicy).

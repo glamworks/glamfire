@@ -10,7 +10,9 @@ import { basename, relative, resolve } from 'node:path';
 import {
   catalogEntry,
   createFireworksGlmAdapter,
+  createLocalAdapter,
   resolveFireworksConfig,
+  resolveLocalConfig,
 } from '@glamfire/adapters';
 import { ConfigError, loadConfig } from '@glamfire/config';
 import { DEFAULT_SYSTEM, builtinTools, defaultPolicy, runTask } from '@glamfire/engine';
@@ -23,7 +25,7 @@ import {
   readLedger,
 } from './ledger.mjs';
 import { brainStorePath, buildEpisode, composeSystem, openBrain, packRecall } from './memory.mjs';
-import { buildModelRegistry, buildRouter } from './router.mjs';
+import { buildModelRegistry, buildRouter, isLocalModel } from './router.mjs';
 import { CODES, color, useColor } from './ui.mjs';
 
 const { DIM, BOLD, FLAME, YELLOW } = CODES;
@@ -34,7 +36,13 @@ Usage: glam run "<task prompt>" [options]
 
 Options:
   --file <path>          Add a file's contents as task input (repeatable)
-  --model <id>           Override the model id (default: GLM 5.2 on Fireworks)
+  --model <id>           Override the model id (default: GLM 5.2 on Fireworks).
+                         A model listed under providers.local.models runs
+                         against your own OpenAI-compatible server (Ollama,
+                         vLLM, LM Studio, DwarfStar/DS4) at $0/token.
+  --local                Route ONLY to self-host models from providers.local
+                         (privacy/offline mode). Fails loud — never silently
+                         falls back to a hosted provider.
   --effort <high|max>    GLM reasoning effort (default: high)
   --tier <tier>          Fireworks service tier: standard|priority|fast|background
   --temperature <n>      Sampling temperature (default: 0.2)
@@ -81,6 +89,7 @@ function parseArgs(args) {
     yes: false,
     allowExec: false,
     json: false,
+    local: false,
   };
   const positional = [];
   for (let i = 0; i < args.length; i += 1) {
@@ -133,6 +142,9 @@ function parseArgs(args) {
         break;
       case '--no-memory':
         opts.memory = false;
+        break;
+      case '--local':
+        opts.local = true;
         break;
       case '--show-thinking':
         opts.showThinking = true;
@@ -219,22 +231,50 @@ export async function cmdRun(argv, { version }) {
   const useColorOut = useColor(process.stdout);
 
   // Load the layered config (defaults < ~/.glam/config.toml < ./glam.toml < env),
-  // then resolve the Fireworks provider slice through it. CLI flags (overrides)
+  // then resolve the relevant provider slice through it. CLI flags (overrides)
   // win over env, which wins over the config files (SPEC §6 precedence).
-  let config;
+  //
+  // Self-host paths (a --model listed under providers.local.models, or --local /
+  // routing.localOnly) resolve the LOCAL provider slice and require NO hosted
+  // API key — a fully local run works on a laptop with no key at all.
+  let config; // Fireworks slice (hosted paths)
+  let localConfig; // local slice (self-host paths)
   let glamConfig;
   let configSources;
+  let localOnly = false;
+  let hostedResolution = false;
   try {
     const loaded = loadConfig({ cwd: process.cwd(), env: process.env });
     glamConfig = loaded.config;
     configSources = loaded.sources;
-    const overrides = {};
-    if (opts.model !== undefined) overrides.model = opts.model;
-    if (opts.effort !== undefined) overrides.reasoningEffort = opts.effort;
-    if (opts.tier !== undefined) overrides.serviceTier = opts.tier;
-    if (opts.temperature !== undefined) overrides.temperature = opts.temperature;
-    if (opts.maxTokens !== undefined) overrides.maxTokens = opts.maxTokens;
-    config = resolveFireworksConfig(process.env, overrides, { config: loaded.config });
+    localOnly = opts.local || glamConfig.routing.localOnly;
+    const localDirect = opts.model !== undefined && isLocalModel(glamConfig, opts.model);
+    // --local promises "nothing leaves this machine" — a hosted --model
+    // alongside it is a contradiction we refuse loudly, never silently ignore.
+    if (opts.local && opts.model !== undefined && !localDirect) {
+      process.stderr.write(
+        `glam run: --local conflicts with --model "${opts.model}": that model is not listed ` +
+          'under providers.local.models. Drop --local, or use a local model id.\n',
+      );
+      process.exitCode = 2;
+      return;
+    }
+    if (localDirect || (localOnly && opts.model === undefined)) {
+      const overrides = {};
+      if (opts.model !== undefined) overrides.model = opts.model;
+      if (opts.temperature !== undefined) overrides.temperature = opts.temperature;
+      if (opts.maxTokens !== undefined) overrides.maxTokens = opts.maxTokens;
+      localConfig = resolveLocalConfig(process.env, overrides, { config: glamConfig });
+    } else {
+      hostedResolution = true;
+      const overrides = {};
+      if (opts.model !== undefined) overrides.model = opts.model;
+      if (opts.effort !== undefined) overrides.reasoningEffort = opts.effort;
+      if (opts.tier !== undefined) overrides.serviceTier = opts.tier;
+      if (opts.temperature !== undefined) overrides.temperature = opts.temperature;
+      if (opts.maxTokens !== undefined) overrides.maxTokens = opts.maxTokens;
+      config = resolveFireworksConfig(process.env, overrides, { config: loaded.config });
+    }
   } catch (err) {
     if (err instanceof ConfigError) {
       process.stderr.write(`glam run: ${err.message}\n`);
@@ -243,10 +283,12 @@ export async function cmdRun(argv, { version }) {
       return;
     }
     process.stderr.write(`glam run: ${err.message}\n`);
-    if (!process.env.FIREWORKS_API_KEY) {
+    if (hostedResolution && !process.env.FIREWORKS_API_KEY) {
       process.stderr.write(
         '\nSet FIREWORKS_API_KEY to call GLM 5.2 on Fireworks, then retry.\n' +
-          'Get a key at https://fireworks.ai and run `glam doctor` to verify.\n',
+          'Get a key at https://fireworks.ai and run `glam doctor` to verify.\n' +
+          'Or run fully local: list your served model under providers.local.models\n' +
+          'and pass --model <that id> (or --local). No API key needed.\n',
       );
     }
     process.exitCode = 1;
@@ -326,15 +368,24 @@ export async function cmdRun(argv, { version }) {
   }
   const system = composeSystem(DEFAULT_SYSTEM, mem.block);
 
-  const adapter = createFireworksGlmAdapter(config);
-  const runtimeConfig = {
-    model: config.model,
-    reasoningEffort: config.reasoningEffort,
-    serviceTier: config.serviceTier,
-    temperature: config.temperature,
-  };
-  if (config.maxTokens !== undefined) runtimeConfig.maxTokens = config.maxTokens;
-  if (config.seed !== undefined) runtimeConfig.seed = config.seed;
+  let adapter;
+  let runtimeConfig;
+  if (localConfig !== undefined) {
+    adapter = createLocalAdapter(localConfig);
+    runtimeConfig = { model: localConfig.model, temperature: localConfig.temperature };
+    if (localConfig.maxTokens !== undefined) runtimeConfig.maxTokens = localConfig.maxTokens;
+    if (localConfig.seed !== undefined) runtimeConfig.seed = localConfig.seed;
+  } else {
+    adapter = createFireworksGlmAdapter(config);
+    runtimeConfig = {
+      model: config.model,
+      reasoningEffort: config.reasoningEffort,
+      serviceTier: config.serviceTier,
+      temperature: config.temperature,
+    };
+    if (config.maxTokens !== undefined) runtimeConfig.maxTokens = config.maxTokens;
+    if (config.seed !== undefined) runtimeConfig.seed = config.seed;
+  }
 
   // Least-privilege by default: writes ask (denied without --yes) and exec is
   // denied outright. --allow-exec promotes ONLY run_command from deny to ask, so
@@ -351,11 +402,20 @@ export async function cmdRun(argv, { version }) {
   // and may escalate to a stronger model on a failed verification.
   const out = process.stdout;
   let router;
+  let registry;
   let decision;
   if (opts.model === undefined) {
     try {
-      const registry = buildModelRegistry(glamConfig, process.env);
-      router = buildRouter(glamConfig, registry);
+      // Under local_only routing, hosted candidates are structurally ineligible
+      // (the policy fails LOUD rather than fall back to a hosted model), so no
+      // hosted key is required to build the registry: the dry-run placeholder
+      // key can never reach a provider.
+      registry = buildModelRegistry(
+        glamConfig,
+        process.env,
+        localOnly ? { allowDryRunKey: true } : {},
+      );
+      router = buildRouter(glamConfig, registry, localOnly ? { localOnly: true } : {});
       decision = router.decide(task); // pure preview for the header/--explain
     } catch (err) {
       if (err instanceof PolicyError) {
@@ -371,25 +431,34 @@ export async function cmdRun(argv, { version }) {
   out.write(
     `${color(useColorOut, FLAME, `glamfire ${version}`)} ${color(useColorOut, DIM, '· run')}\n`,
   );
-  const chosenModel = decision ? decision.selection.chosen.id : config.model;
+  const chosenModel = decision ? decision.selection.chosen.id : (localConfig ?? config).model;
   const chosenAdapter = decision ? decision.selection.chosen.adapter : adapter;
   out.write(providerModelHeader(chosenAdapter, chosenModel));
   if (decision) {
     const c = decision.classification;
+    const localTag = localOnly ? ', local-only' : '';
     out.write(
       color(
         useColorOut,
         DIM,
-        `  routing: ${c.distribution} (score ${c.score.toFixed(2)}, confidence ${c.confidence.toFixed(2)}) → ${chosenModel}\n`,
+        `  routing: ${c.distribution} (score ${c.score.toFixed(2)}, confidence ${c.confidence.toFixed(2)}${localTag}) → ${chosenModel}\n`,
       ),
     );
   } else {
     out.write(color(useColorOut, DIM, '  routing: explicit --model override (router bypassed)\n'));
   }
-  out.write(
-    `  effort: ${config.reasoningEffort}   tier: ${config.serviceTier}   ` +
-      `budget: ${fmtUSD(budget.maxUSD)} / ${budget.maxSteps} steps\n`,
-  );
+  if (localConfig !== undefined) {
+    const declared = `$${localConfig.usdPerMInput}/$${localConfig.usdPerMOutput} per 1M`;
+    out.write(
+      `  endpoint: ${localConfig.baseUrl}   price: ${declared} (self-host, declared)   ` +
+        `budget: ${fmtUSD(budget.maxUSD)} / ${budget.maxSteps} steps\n`,
+    );
+  } else {
+    out.write(
+      `  effort: ${config.reasoningEffort}   tier: ${config.serviceTier}   ` +
+        `budget: ${fmtUSD(budget.maxUSD)} / ${budget.maxSteps} steps\n`,
+    );
+  }
   // Memory is visible on every run (SPEC §9 honesty): what was recalled, from
   // where — or exactly why memory is off. Zero recalls from an empty store is a
   // normal, honest state.
@@ -511,6 +580,24 @@ export async function cmdRun(argv, { version }) {
       `(${total} total)   cost: ${fmtUSD(run.costUSD)}   ` +
       `steps: ${run.steps.length}   status: ${run.status}\n`,
   );
+
+  // Usage honesty for self-host servers (SPEC §5.4, research/27): some local
+  // servers omit token usage from responses. Say so explicitly rather than
+  // presenting silent zeros as measured counts — numbers are never invented.
+  const unreportedTurns = (a) =>
+    a && typeof a.turnsWithoutUsage === 'number' ? a.turnsWithoutUsage : 0;
+  const turnsWithoutUsage = router
+    ? (registry?.all() ?? []).reduce((n, d) => n + unreportedTurns(d.adapter), 0)
+    : unreportedTurns(adapter);
+  if (turnsWithoutUsage > 0) {
+    out.write(
+      color(
+        useColorOut,
+        YELLOW,
+        `note: the local server reported NO token usage for ${turnsWithoutUsage} turn(s) — the token counts above exclude those turns (glamfire never invents numbers).\n`,
+      ),
+    );
+  }
 
   // --- memory in the loop: episode capture AFTER the run (SPEC §5.2) ---------
   // Persist a structured episode — task, outcome, decisions, files touched,

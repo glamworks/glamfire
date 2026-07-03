@@ -1,13 +1,17 @@
 // @glamfire/adapters — per-model harnesses behind one contract (SPEC §5.4).
 // First-class adapters: fireworks-glm (GLM-5.2, the reference), together (GLM-5.2
-// + Qwen3-Coder-Next on Together AI), and anthropic (Claude family, for edge
-// escalation / migration parity). The OpenAI-compatible ones share one core
+// + Qwen3-Coder-Next on Together AI), anthropic (Claude family, for edge
+// escalation / migration parity), and local (ANY OpenAI-compatible self-host
+// server: Ollama, vLLM, SGLang, LM Studio, DwarfStar/DS4 — the $0/token
+// self-host tier). The OpenAI-compatible ones share one core
 // (./openai-compatible). All are gated by the shared conformance suite
 // (./conformance).
 
 export {
   BUILTIN_CATALOG,
   CATALOG_PROVIDERS,
+  SELF_HOST_PROVIDERS,
+  isSelfHostProvider,
   catalogEntry,
   catalogEntrySchema,
   catalogKey,
@@ -76,6 +80,21 @@ export {
   type ResolveAnthropicOptions,
   resolveAnthropicConfig,
 } from './anthropic-config.js';
+export {
+  DWARFSTAR_DEFAULT_BASE_URL,
+  LMSTUDIO_DEFAULT_BASE_URL,
+  LOCAL_DEFAULT_BASE_URL,
+  LOCAL_DEFAULT_CAPABILITIES,
+  LOCAL_DEFAULT_CONTEXT_WINDOW,
+  LOCAL_DEFAULT_MAX_OUTPUT_TOKENS,
+  OLLAMA_DEFAULT_BASE_URL,
+  localConfigSchema,
+  resolveLocalConfig,
+  type LocalConfig,
+  type LocalOverrides,
+  type ResolveLocalOptions,
+} from './local-config.js';
+export { LocalAdapter, createLocalAdapter, localCapabilities } from './local.js';
 export {
   AnthropicAdapter,
   createAnthropicAdapter,

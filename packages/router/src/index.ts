@@ -42,6 +42,7 @@ export { ModelRegistry, descriptorFromAdapter } from './registry.js';
 export {
   PolicyError,
   evaluatePolicy,
+  isLocalDescriptor,
   type CandidateEval,
   type RuleEvaluation,
   type PolicySelection,
