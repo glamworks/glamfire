@@ -2,7 +2,7 @@
 // Smoke test: exercise the REAL glam CLI the way a human would (SPEC §10).
 // No mocks. Spawns the actual binary and asserts real output.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -354,6 +354,71 @@ check('glam run without FIREWORKS_API_KEY fails with actionable guidance', () =>
     if (!text.includes('FIREWORKS_API_KEY')) throw new Error('missing key guidance');
   }
 });
+
+// --- memory in the loop (SPEC §5.2, issue #27) --------------------------------
+// The brain is wired into `glam run`: recall before, episode capture after.
+
+check('glam run --help documents memory in the loop and --no-memory', () => {
+  const out = run('run', '--help');
+  if (!out.includes('--no-memory')) throw new Error('missing --no-memory option');
+  if (!out.includes('brain')) throw new Error('run help should describe the brain memory loop');
+  if (!out.includes('GLAM_MEMORY')) throw new Error('run help should name the env kill switch');
+});
+
+if (process.env.FIREWORKS_API_KEY) {
+  // Two REAL GLM calls in a hermetic scratch project: the first run teaches a
+  // fact (captured as an episode in .glam/brain.db), the second run must
+  // demonstrably recall it — the headline "own your context" claim, live.
+  check('live: glam run teaches, then a second run RECALLS via the project brain', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-memory-'));
+    try {
+      const home = join(dir, 'home');
+      mkdirSync(home, { recursive: true });
+      const env = {
+        PATH: process.env.PATH,
+        HOME: home,
+        USERPROFILE: home,
+        FIREWORKS_API_KEY: process.env.FIREWORKS_API_KEY,
+      };
+      const runGlam = (prompt) =>
+        execFileSync('node', [cli, 'run', '--no-stream', prompt], {
+          encoding: 'utf8',
+          cwd: dir,
+          env,
+          timeout: 180_000,
+        });
+      const first = runGlam(
+        "Remember this project decision for later: the internal release codename is 'copper-falcon-77'. Acknowledge briefly.",
+      );
+      if (!first.includes('memory: store empty — recalled 0')) {
+        throw new Error(`first run should honestly recall 0 from an empty store:\n${first}`);
+      }
+      if (!/episode [0-9a-f]{8} saved/.test(first)) {
+        throw new Error(`first run did not save an episode:\n${first}`);
+      }
+      if (!existsSync(join(dir, '.glam', 'brain.db'))) {
+        throw new Error('brain store .glam/brain.db was not created in the project');
+      }
+      const second = runGlam(
+        'What is the internal release codename? Answer with just the codename.',
+      );
+      if (!/memory: recalled [1-9]/.test(second)) {
+        throw new Error(`second run recalled nothing from the brain:\n${second}`);
+      }
+      if (!second.includes('copper-falcon-77')) {
+        throw new Error(`second run did not recall the taught fact:\n${second}`);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+} else {
+  // Never faked: without a key there is no real provider call to make. Say so
+  // loudly (same policy as the CI self-hosting gate) instead of a silent skip.
+  process.stdout.write(
+    '  ! live memory round-trip NOT verified: FIREWORKS_API_KEY is not set — set it to exercise the teach→recall smoke\n',
+  );
+}
 
 // --- glam config: the layered configuration surface (SPEC §6) -----------------
 // Drive the real binary against real temp config files (user + project) and a

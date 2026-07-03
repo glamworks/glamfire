@@ -170,3 +170,20 @@ maxSteps = 8               # plan->act->observe loop cap
 [usage]
 # monthlyBudgetUsd = 25.0   # soft monthly spend budget in USD (opt-in)
 warnAtPct = 80              # warn when month-to-date spend crosses this %
+
+# ---------------------------------------------------------------------------
+# Memory — the brain in the run loop (SPEC §5.2). Every `glam run` first
+# recalls relevant records from the project's local brain store (offline hybrid
+# retrieval: vector + keyword + recency + provenance) and packs the top hits —
+# under a hard token cap, with record ids and sources — into the model context;
+# afterward a structured episode (task, outcome, decisions, files touched,
+# models, cost) is written back so future runs remember. Local-first and owned:
+# the store is a single portable SQLite file, never uploaded, exportable to
+# JSONL. Zero recalls from a fresh store is normal, not an error. Disable
+# per-run with `--no-memory` or globally here / via GLAM_MEMORY=false.
+# ---------------------------------------------------------------------------
+[memory]
+enabled = true              # master switch for recall + episode capture
+# store = ".glam/brain.db"  # brain store path (default: <project>/.glam/brain.db)
+recallLimit = 6             # top-K records considered per run
+recallTokenBudget = 1200    # hard token cap for the packed recall block

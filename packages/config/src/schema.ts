@@ -185,6 +185,28 @@ export const usageSchema = z.strictObject({
 });
 export type UsageConfig = z.infer<typeof usageSchema>;
 
+// --- memory (the brain in the run loop — SPEC §5.2, issue #27) ----------------
+
+/**
+ * Memory in the loop: before each `glam run` the task is used to query the
+ * project's brain store and the top hits are packed (hard token cap, full
+ * provenance) into the model context; after the run a structured episode is
+ * written back so future runs recall it. Offline by default (hash embedder),
+ * local-first, never uploaded. Disable per-run with `--no-memory`, per-project
+ * with `enabled = false`, or via GLAM_MEMORY=false.
+ */
+export const memorySchema = z.strictObject({
+  /** Master switch for run-loop memory (retrieval + episode capture). */
+  enabled: z.boolean(),
+  /** Brain store file. Default: `<project>/.glam/brain.db` (project-scoped). */
+  store: z.string().min(1).optional(),
+  /** Max recalled records considered per run (top-K before token packing). */
+  recallLimit: z.number().int().min(1).max(50),
+  /** Hard token cap for the packed recall block in the model context. */
+  recallTokenBudget: z.number().int().min(64).max(32768),
+});
+export type MemoryConfig = z.infer<typeof memorySchema>;
+
 // --- top level ---------------------------------------------------------------
 
 export const glamConfigSchema = z.strictObject({
@@ -198,6 +220,7 @@ export const glamConfigSchema = z.strictObject({
   sandbox: sandboxSchema,
   run: runSchema,
   usage: usageSchema,
+  memory: memorySchema,
 });
 export type GlamConfig = z.infer<typeof glamConfigSchema>;
 
@@ -273,6 +296,12 @@ export function builtinDefaults(): GlamConfig {
     usage: {
       // No monthly budget by default (alerting is opt-in); warn at 80% once set.
       warnAtPct: 80,
+    },
+    memory: {
+      // Memory is live by default: local-first, offline embedder, project store.
+      enabled: true,
+      recallLimit: 6,
+      recallTokenBudget: 1200,
     },
   };
 }

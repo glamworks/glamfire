@@ -47,7 +47,7 @@ export interface LoadedConfig {
 interface EnvBinding {
   env: string;
   path: string[];
-  kind: 'string' | 'number';
+  kind: 'string' | 'number' | 'boolean';
 }
 
 const ENV_BINDINGS: EnvBinding[] = [
@@ -60,6 +60,7 @@ const ENV_BINDINGS: EnvBinding[] = [
   { env: 'GLAM_MAX_STEPS', path: ['run', 'budget', 'maxSteps'], kind: 'number' },
   { env: 'GLAM_MONTHLY_BUDGET_USD', path: ['usage', 'monthlyBudgetUsd'], kind: 'number' },
   { env: 'GLAM_WARN_AT_PCT', path: ['usage', 'warnAtPct'], kind: 'number' },
+  { env: 'GLAM_MEMORY', path: ['memory', 'enabled'], kind: 'boolean' },
   { env: 'FIREWORKS_BASE_URL', path: ['providers', 'fireworks', 'baseUrl'], kind: 'string' },
   { env: 'ANTHROPIC_BASE_URL', path: ['providers', 'anthropic', 'baseUrl'], kind: 'string' },
   { env: 'OPENAI_BASE_URL', path: ['providers', 'openai', 'baseUrl'], kind: 'string' },
@@ -87,9 +88,16 @@ function buildEnvLayer(env: Record<string, string | undefined>): Record<string, 
   for (const binding of ENV_BINDINGS) {
     const raw = env[binding.env];
     if (raw === undefined || raw === '') continue;
-    // Numbers are parsed; an unparseable value flows to zod, which rejects it
-    // with an actionable message rather than silently dropping it.
-    const value: unknown = binding.kind === 'number' ? Number(raw) : raw;
+    // Numbers/booleans are parsed; an unparseable value flows to zod, which
+    // rejects it with an actionable message rather than silently dropping it.
+    let value: unknown = raw;
+    if (binding.kind === 'number') value = Number(raw);
+    if (binding.kind === 'boolean') {
+      const lowered = raw.toLowerCase();
+      if (['true', '1', 'on', 'yes'].includes(lowered)) value = true;
+      else if (['false', '0', 'off', 'no'].includes(lowered)) value = false;
+      // otherwise pass the raw string through so zod rejects it loudly
+    }
     setPath(data, binding.path, value);
   }
   return data;
