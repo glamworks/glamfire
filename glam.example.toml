@@ -187,3 +187,28 @@ enabled = true              # master switch for recall + episode capture
 # store = ".glam/brain.db"  # brain store path (default: <project>/.glam/brain.db)
 recallLimit = 6             # top-K records considered per run
 recallTokenBudget = 1200    # hard token cap for the packed recall block
+
+# ---------------------------------------------------------------------------
+# glam serve — the router-as-proxy gateway (docs/PROXY.md). Keep Claude Code /
+# opencode / Cursor / any OpenAI SDK and point its base URL here: requests run
+# on GLM 5.2 (or the router's choice), metered exactly into the usage ledger.
+#   export ANTHROPIC_BASE_URL="http://127.0.0.1:4114"
+#   export ANTHROPIC_AUTH_TOKEN="<token `glam serve` prints>"
+# The bearer token is a secret and never lives in this file: set GLAM_SERVE_TOKEN
+# or --token, else a per-session token is generated and printed once.
+# ---------------------------------------------------------------------------
+[serve]
+port = 4114                 # 0 = pick an ephemeral port and print it
+bind = "127.0.0.1"          # non-loopback binds REQUIRE an explicit token
+target = "pin"              # "pin" -> serve.model for every request; "route" ->
+                            # the cost-aware router picks per request
+# model = "accounts/fireworks/models/glm-5p2"   # pinned target (default: top-level model)
+
+# Unlike [usage] (alerting only), these are HARD stops: an over-budget request
+# is rejected with a clean provider-shaped error BEFORE any provider is called.
+[serve.budgets]
+# monthlyUsd = 25.0         # all proxy traffic, month-to-date
+# Per-client stops, keyed by the client label (x-glam-client header, else the
+# user-agent family: claude-code, opencode, cursor, curl, ...):
+# [serve.budgets.clients.claude-code]
+# monthlyUsd = 10.0

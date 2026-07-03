@@ -70,6 +70,9 @@ importers:
       '@glamfire/engine':
         specifier: workspace:*
         version: link:../engine
+      '@glamfire/proxy':
+        specifier: workspace:*
+        version: link:../proxy
       '@glamfire/router':
         specifier: workspace:*
         version: link:../router
@@ -84,6 +87,12 @@ importers:
         version: 4.4.3
 
   packages/engine: {}
+
+  packages/proxy:
+    dependencies:
+      '@glamfire/engine':
+        specifier: workspace:*
+        version: link:../engine
 
   packages/router:
     dependencies:

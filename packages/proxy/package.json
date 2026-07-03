@@ -1,0 +1,24 @@
+{
+  "name": "@glamfire/proxy",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Router-as-proxy translation layer: Anthropic Messages and OpenAI chat-completions dialects over glamfire's adapters, so existing agents (Claude Code, opencode, Cursor) run with glamfire's meter, router, budget stops, and ledger underneath (research/28, research/32 item 4).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc --build tsconfig.json",
+    "typecheck": "tsc --build tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@glamfire/engine": "workspace:*"
+  }
+}

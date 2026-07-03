@@ -24,6 +24,8 @@ export {
   runSchema,
   usageSchema,
   memorySchema,
+  serveSchema,
+  serveClientBudgetSchema,
   credentialRefSchema,
   capabilitySchema,
   type GlamConfig,
@@ -39,6 +41,8 @@ export {
   type RunConfig,
   type UsageConfig,
   type MemoryConfig,
+  type ServeConfig,
+  type ServeClientBudget,
   type BudgetConfig,
   type Verdict,
 } from './schema.js';

@@ -24,6 +24,7 @@ const BANNER = `glamfire ${VERSION}  ·  the open harness for the last mile of A
 const COMMANDS = [
   'run',
   'route',
+  'serve',
   'usage',
   'models',
   'brain',
@@ -40,6 +41,9 @@ Usage: glam <command> [options]
 Commands:
   run "<prompt>"     Run a task against GLM 5.2 on Fireworks (real inference)
   route "<prompt>"   Show how a task would be routed (offline, no provider call)
+  serve              Local Anthropic/OpenAI-compatible gateway: keep Claude Code
+                     (ANTHROPIC_BASE_URL) or any OpenAI client, run it on GLM 5.2
+                     with glamfire's meter, router, budget stops, and ledger under it
   usage              Show spend/token usage from the local ledger (offline)
   models             Show the model/provider landscape: prices, quant, context
                      (--refresh pulls current prices from provider APIs)
@@ -96,6 +100,10 @@ async function main(argv) {
   if (first === 'run') {
     const { cmdRun } = await import('./run.mjs');
     return cmdRun(args.slice(1), { version: VERSION });
+  }
+  if (first === 'serve') {
+    const { cmdServe } = await import('./serve.mjs');
+    return cmdServe(args.slice(1), { version: VERSION });
   }
   if (first === 'usage') {
     const { cmdUsage } = await import('./usage.mjs');

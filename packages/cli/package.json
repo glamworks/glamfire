@@ -31,6 +31,7 @@
     "@glamfire/brain": "workspace:*",
     "@glamfire/config": "workspace:*",
     "@glamfire/engine": "workspace:*",
+    "@glamfire/proxy": "workspace:*",
     "@glamfire/router": "workspace:*"
   }
 }
