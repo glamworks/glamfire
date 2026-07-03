@@ -4,6 +4,26 @@ All notable changes to this project are documented here. Based on the real git
 history; newest versions first. This project adheres to
 [Keep a Changelog](https://keepachangelog.com/).
 
+## v0.6.0
+
+- **feat(proxy): `glam serve` — the router-as-proxy gateway.** A local
+  Anthropic-Messages + OpenAI-chat-completions endpoint that puts glamfire's meter,
+  router, **hard** budget stops, and owned usage ledger under agents you already run
+  (Claude Code, opencode, Cursor, any OpenAI SDK). Streaming both dialects,
+  tool-call IDs round-trip verbatim, bearer auth always required, loopback by
+  default. Per-client budgets reject over-budget requests with a provider-shaped
+  error before any provider is called. `glam usage` gains a by-client breakdown.
+  Live-verified: real Claude Code headless through the proxy to GLM 5.2 on
+  Fireworks — 2 tasks with real tool calls metered at $0.0423 vs a $0.303
+  Claude-pricing estimate for the same session. See docs/PROXY.md. (#41)
+- **feat(brain): the markdown is the brain; SQLite is a rebuildable index.** Every
+  record is a readable markdown file with YAML frontmatter under `brain/`
+  (sources/facts/notes/pointers/episodes + generated INDEX.md and log.md):
+  `truth: source|summary`, `sharing: personal|team`, `derived_from` with per-link
+  content hashes. New `glam brain add|list|query|sync|lint|rebuild`. Content-hash
+  sync (file-wins for sources; conflicts surfaced, never merged silently). The
+  tested invariant: delete the .sqlite, rebuild losslessly from markdown. (#36)
+
 ## v0.5.0
 
 - **feat(engine/brain): memory is in the loop** — every `glam run` recalls relevant
