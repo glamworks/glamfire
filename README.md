@@ -4,14 +4,14 @@
 
 # glamfire
 
-### The open harness for the last mile of AI.
+### The open harness for the context wars.
 
 **Own your context. Route your intelligence. Never rent your brain back.**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-foundation-orange.svg)](#current-reality)
+[![Status](https://img.shields.io/badge/status-shipping-brightgreen.svg)](#current-reality)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-informational.svg)](#install)
-[![Default model](https://img.shields.io/badge/default-GLM%205.2%20on%20Fireworks-ff5a1f.svg)](#why-glm-52--fireworks)
+[![Default model](https://img.shields.io/badge/default-GLM%205.2%20on%20Fireworks-ff5a1f.svg)](#the-workhorse-glm-52--fireworks)
 
 [Spec](SPEC.md) · [Quickstart](docs/QUICKSTART.md) · [Architecture](docs/ARCHITECTURE.md) · [Mission](docs/MISSION.md) · [Why we win](docs/WHY-WE-WIN.md) · [Current reality](#current-reality) · [Contribute](CONTRIBUTING.md) · [Site](https://glamworks.github.io)
 
@@ -19,17 +19,17 @@
 
 ---
 
-## The 98% problem
+## The intelligence wars are over. The context wars have begun.
 
-Intelligence just got about **98% cheaper**. Open models like **GLM 5.2** now match or
-beat the frontier on the *broad middle of everyday work* — the brochure site, the
-standard deck, the first‑pass copy, the routine synthesis, the familiar coding task.
-Faster. Cheaper. Free to self‑host.
+Intelligence got roughly **98% cheaper**. Open models like **GLM 5.2** don't just keep
+up on the broad middle of everyday work — the routine coding task, the standard deck,
+the first‑pass copy, the familiar synthesis — they lead it, at a fraction of frontier
+cost, free to self‑host. The next useful AI product is not the one that wins a
+benchmark. It's the one that knows where your work is, what it's allowed to see, and
+what it's allowed to do.
 
-So why is almost nobody switching?
-
-Because a model is a **brain in a jar**. What your company actually runs is the *work
-system* around it — the **harness** and its **last mile**:
+So why is almost nobody switching? Because a model is a **brain in a jar**. What your
+company actually runs is the *work system* around it — the **harness**:
 
 - the **context** the model sees (memory, retrieval, your team's hard‑won knowledge),
 - the **routing** that picks the right model for each task,
@@ -37,19 +37,30 @@ system* around it — the **harness** and its **last mile**:
 - the **system prompts**, tuned to one lab's quirks,
 - the **surfaces** — CLI, chat, IDE — where work happens.
 
-Switching models means rebuilding all of it. The talent that can do that is scarce and
-expensive, so companies sign a frontier contract instead. And the frontier labs are
-racing to put their assistant *inside your team chat* — quietly absorbing the messy
-context that **is** your edge, until you're renting your own brain back from them
-forever, with no way to rip it out.
+Switching models means rebuilding all of it. The talent that can do that is the
+scarcest resource in AI — so companies sign a frontier contract instead.
 
-**glamfire is the open, self‑owned harness that closes the last mile.** Keep your
-context in your hands. Route every task to the cheapest model that can actually do it.
-Run one work system across any model family. Make cheap intelligence *usable* without
-handing your context to anyone.
+And the labs know it. The new fight isn't over model quality — it's over **who sits
+closest to your context**. Frontier assistants are moving *inside your team chat*,
+quietly absorbing the messy, uncodified knowledge that is your actual edge. Once a
+vendor's model is that close to your context, it doesn't matter how cheap open models
+get — you can't rip it out. Companies spent decades learning that data is their alpha,
+and are now handing it to a model vendor as context. That's the failure mode:
+**renting your company's brain back from a frontier lab, forever.**
 
-> If you can build a harness, this is the opening of the decade. glamfire is that
-> harness, in the open, for everyone.
+There is also a newer, harder lesson: **continuity**. 2026 has already shown that the
+model you build on can be forced offline for weeks, restricted to approved partners,
+or repriced overnight. The teams that shrugged were the ones that never tied their
+work to a single model — they owned their harness, routed elsewhere, and kept moving.
+
+**glamfire is the open, self‑owned harness for exactly this moment.** Keep your
+context in your hands — local‑first, exportable, tested. Route every task to the
+cheapest model that can actually do it; make the frontier *earn* its escalations. Run
+one work system across any model family, so no outage, ban, or price hike can stall
+your work — and **model choice never becomes work**.
+
+> The last mile of AI is a trillion-dollar problem, and the talent to build it is the
+> scarcest resource in AI. glamfire is that harness — in the open, for everyone.
 
 ---
 
@@ -74,27 +85,39 @@ load‑bearing subsystems:
   your team's context to a lab: the knowledge stays in **your** store.
 - **surfaces** — the `glam` CLI, an SDK, and a server/daemon mode.
 
+One promise threads through all of it: **model choice must never become work.**
+glamfire decides, shows you the decision (`glam route`, `glam models`), and lets you
+overrule.
+
 See **[SPEC.md](SPEC.md)** for the full specification.
 
 ---
 
-## Why GLM 5.2 + Fireworks
+## The workhorse: GLM 5.2 + Fireworks
 
-GLM 5.2 is a ~744B‑total / 40B‑active MoE with a 1M‑token context, native
-OpenAI‑compatible tool calling, and top‑tier results on design and real‑world coding —
-at roughly a fifth of frontier cost. It is, for the **center of distribution**, one of
-the best models in the world. **Fireworks AI** serves it on an OpenAI‑compatible API
-with prompt caching, batch tiers, and on‑demand GPUs.
+GLM 5.2 (MIT license, ~753B MoE, 1M‑token context, native OpenAI‑compatible tool
+calling) is the **#1‑ranked open‑weight model** on the Artificial Analysis Intelligence
+Index and beats frontier flagships on real‑work benchmarks like SWE‑bench Pro — at
+roughly a fifth to a sixth of frontier cost. That is not "good enough for the price."
+It is **the best model in the world at the center of the distribution — which, by
+definition, is most of your work.** **Fireworks AI** serves it FP8 on an
+OpenAI‑compatible API with prompt caching, batch pricing, and on‑demand GPUs.
 
-That combination — excellent, cheap, open, easy to serve — is the default workhorse
-glamfire routes to. Everything else escalates only when it has to.
+That combination — excellent, cheap, open, easy to serve — is glamfire's default
+workhorse. Frontier models remain in the loop as **escalation candidates** for the
+messy, novel edge of the distribution: they get a task only when the router's
+confidence says the cheap model can't hold it. The frontier must *earn* its tokens.
+
+The winners at each price tier change monthly — run **`glam models`** for the live
+landscape ([research/25](research/25-provider-landscape-2026-07.md) has the July 2026
+snapshot with cited prices). That churn is the point: the durable layer is the routing
+and the owned context, not any one model — and that layer is what glamfire is.
 
 ---
 
 ## Install
 
-> **Heads‑up:** glamfire is at the **foundation** stage. The pieces below describe the
-> shipping surface; see **[Current reality](#current-reality)** for exactly what runs
+> **Heads‑up:** see **[Current reality](#current-reality)** for exactly what runs
 > today versus what is specified and in progress. We do not market vaporware.
 
 The install paths below are **built and tested** — the `glam` CLI bundles to a
@@ -130,7 +153,7 @@ node packages/cli/src/index.mjs --version
 ```
 
 > **What's live.** **All four package managers are wired and shipping.** The
-> [`glamfire`](https://www.npmjs.com/package/glamfire) npm package (latest: `0.2.4`) is
+> [`glamfire`](https://www.npmjs.com/package/glamfire) npm package (latest: `0.4.0`) is
 > published — verified by installing from the public registry and running the installed
 > `glam`; the [Homebrew tap](https://github.com/glamworks/homebrew-tap)
 > (`Formula/glamfire.rb`) and [Scoop bucket](https://github.com/glamworks/scoop-bucket)

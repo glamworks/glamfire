@@ -40,7 +40,8 @@ coexist — adapters/root on zod 4, brain on zod 3 (resolve independently; stand
   Build: `bun scripts/build-npm.mjs --pack`, `build-binaries.mjs`, `verify-artifacts.mjs`.
   **PUBLISHING NOW LIVE (v0.2.1+)**: npm + Homebrew tap + Scoop bucket publish on every `v*`
   tag; winget submits a PR to microsoft/winget-pkgs (windows job, wingetcreate). All secrets set.
-  KNOWN: `glam doctor` install-check shows ✗ inside compiled binary (cosmetic; npm pkg ok).
+  FIXED (v0.4.0): `glam doctor` install-check inside compiled binary — context-aware
+  detectInstall() recognizes the /$bunfs standalone mount and reports honestly.
 - **Memecoin (prepare-only, NOT LIVE)** — `marketing/meme-coin/`: real guarded devnet mint.mjs
   (Solana deps isolated, NOT in workspace), two-layer mainnet guard (irreversibility flag +
   interactive typed confirm), guard test, finalized spec/runbook/disclaimer. STATUS marker
@@ -165,3 +166,44 @@ first glamfire-authored PR (M2); team Slack (#7); SDK; server/daemon; Docker. Op
 **Next (key-independent, lock-step, when ready)**: team Slack surface (#7, live needs Slack token),
 `@glamfire/sdk` (typed API over engine/brain/router/skills), server/daemon mode, Docker. Open
 issues remaining: #1 (north star), #2 #3 #9 (live-call pending key), #7 (team), #11 (quickstart docs), #13 (join us).
+
+**CONTEXT-WARS WAVE SHIPPED (2026-07-03, v0.4.0)** — 4 parallel builders + 2 researchers,
+orchestrator-integrated on `integration/context-wars-wave`, 354 tests, smoke PASS:
+- **Usage/billing**: append-only JSONL ledger `~/.glam/usage.jsonl` (portable, no native
+  deps, corrupt lines counted not hidden); every `glam run` records adapter/provider/model/
+  tokens/cost/duration/escalations + per-model split (ModelTurnStep now stamps adapter+model
+  — additive PUBLIC engine type change, drove the minor bump). `glam usage` (by day/model/
+  provider, --since, --json, budget bar); opt-in `[usage] monthlyBudgetUsd`/`warnAtPct`.
+- **`glam models`**: evergreen landscape view. `packages/adapters/src/catalog.ts` = SINGLE
+  SOURCE OF TRUTH for pricing (13 entries, every price live-verified w/ asOf+sourceUrl;
+  null = unpublished, never guessed). Adapters price through `catalogPriceRow()` (fail-loud)
+  so `glam route`/`run`/`models` can never drift. `--refresh`: Together live prices
+  (plausibility-guarded), Fireworks availability-only (publishes no machine prices — says
+  so), price-drop diffs, cache `~/.glam/cache/models.json`. Qwen 3.7 Plus EXCLUDED
+  (closed weights) w/ regression test. GLM-5.2 license = MIT (verified HF card).
+- **DeepSeek V4 (current gen; R2 does NOT exist)**: Fireworks primary — `deepseek-v4-pro`
+  ($1.74/$3.48 FP8 1M ctx) + `deepseek-v4-flash` ($0.14/$0.28 — budget tier, no priority
+  tier so requesting it fails loud) — conformance 63/63, live-verified incl. parallel tool
+  calls + seed + real cache hit ($0.000372 run). Together `deepseek-ai/DeepSeek-V4-Pro`
+  wired, live pending TOGETHER_API_KEY. Both DeepSeeks are thinking models
+  (reasoning_content/reasoning_effort). Fireworks adapter now FAILS LOUD on unknown model
+  ids (was: silent GLM pricing). Together DeepSeek price: live model page $1.74/$3.48 wins
+  over launch-blog $2.10/$4.40 — reconcile on first invoice.
+- **UX/perf**: doctor compiled-binary ✗ ROOT-CAUSED+FIXED (context-aware detectInstall,
+  /$bunfs mount detection, version-drift check); real SIGINT (AbortSignal CLI to engine to
+  adapter fetch, status `interrupted`, honest partial cost, exit 130); numeric option
+  validation (exit 2, was silent NaN killing the cost ceiling); did-you-mean; one color
+  policy (FORCE_COLOR > NO_COLOR > TTY); EPIPE-safe; stacks behind GLAM_DEBUG=1; startup
+  66ms to 28ms (lazy command imports — keep new commands lazy!).
+- **Messaging (context-wars frame, creator still unnamed)**: README hero rewritten
+  ("The intelligence wars are over. The context wars have begun."), continuity as
+  co-equal sell with cost, docs/WHY-WE-WIN.md replaced, status badge foundation to
+  shipping. Issues filed from creator-thesis: #16 distribution profiler, #17 receipts,
+  #18 outage failover, #19 work queue; #13 refreshed. Site refresh STAGED (scratchpad
+  clone, branch `messaging/context-wars`) — review+push after release.
+- **GOTCHA (2 workers hit it)**: workers embedded raw NUL bytes as map-key separators in
+  source template literals — file turns binary to git/grep/Biome. Always write the
+  6-char escape sequence (backslash-u-0000), never the raw byte.
+- Research: `research/24-creator-thesis-update.md` (thesis now context wars; DeepSeek =
+  canonical migration story; routing-shaped adoption wave) + `research/25-provider-
+  landscape-2026-07.md` + registry seed JSON (models/providers/prices, cited).

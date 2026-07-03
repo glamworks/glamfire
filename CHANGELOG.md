@@ -4,6 +4,27 @@ All notable changes to this project are documented here. Based on the real git
 history; newest versions first. This project adheres to
 [Keep a Changelog](https://keepachangelog.com/).
 
+## v0.4.0
+
+- **feat(usage):** local usage ledger (`~/.glam/usage.jsonl`) — every `glam run` records
+  model, provider, tokens, real cost, duration, and per-model escalation splits; new
+  `glam usage` command (totals, by day/model/provider, `--since`, `--json`, budget bar);
+  opt-in monthly budget alerts (`[usage] monthlyBudgetUsd` / `warnAtPct`).
+- **feat(models):** evergreen model/provider landscape — new `glam models` command over a
+  built-in catalog (13 entries, live-verified prices with as-of dates and sources);
+  `--refresh` pulls current provider prices, reports price drops, caches honestly;
+  adapters price *through* the catalog so route/run/models can never drift.
+- **feat(adapters):** DeepSeek V4 support — `deepseek-v4-pro` + `deepseek-v4-flash` on
+  Fireworks (FP8, 1M context, live-verified incl. parallel tool calls, seed, and prompt
+  caching) and `DeepSeek-V4-Pro` on Together (live pending key); adapter conformance
+  63/63; Fireworks adapter now fails loud on unknown model ids.
+- **feat(cli):** hardening/UX sweep — honest `glam doctor` inside compiled binaries
+  (root-caused `/$bunfs` detection), real Ctrl-C interrupt (aborts in-flight provider
+  request, honest partial cost, exit 130), numeric option validation, did-you-mean
+  suggestions, `NO_COLOR`/`FORCE_COLOR` policy, EPIPE-safe piping, 2.3× faster startup.
+- **docs:** context-wars messaging (README hero, WHY-WE-WIN), research briefs 24–25
+  (creator-thesis update; provider/model landscape 2026-07 with cited prices).
+
 ## v0.3.0
 
 - **feat(engine):** read-only git tools — `git_status` / `git_diff` / `git_log` / `git_show`.
