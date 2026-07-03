@@ -34,6 +34,13 @@ Standing product direction. Every item below is a durable directive, not a one-o
   glamfire incorporates the Claude Code brain/memory into glamfire memory in real
   time. Knowledge picked up in Claude Code is available to any model in glamfire.
   Walk away from Claude Code and keep everything.
+- **Brownfield first (Brian, 2026-07-03):** target machines have already run Claude
+  Code with DEFAULT config — existing auto-memory at the default location, existing
+  CLAUDE.md hierarchy, transcripts mid-retention. `autoMemoryDirectory` repointing
+  alone only covers fresh installs. Required: an adopt/import path that discovers and
+  ingests existing state (with provenance), then live-syncs — via config flip AND/OR
+  symlink of the default dir into the glamfire tree — idempotent, reversible, never
+  clobbering. Claude Code must keep working unchanged throughout.
 
 ## Subscriptions coexistence (hard requirement)
 
