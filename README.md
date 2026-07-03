@@ -64,7 +64,86 @@ your work — and **model choice never becomes work**.
 
 ---
 
-## What glamfire is
+## What is this, concretely?
+
+glamfire is a **command-line agent you point at real work**:
+
+```bash
+glam run "read this repo and write a CHANGELOG.md from the git history" --max-usd 0.05
+```
+
+Same shape of tool as Claude Code or opencode: it plans, calls real tools (read/write/edit
+files, search code, read git, run allowed commands), observes the results, iterates, and
+stops when the work is done — or when its budget is hit. glamfire wrote its own
+`CHANGELOG.md` this way, opened the PR, and it merged; the run cost about a cent.
+
+The difference is everything wrapped around that loop:
+
+1. **It picks the model per task, not per subscription.** The router scores each task
+   center‑vs‑edge and sends it to the **cheapest model that can actually do it** — open
+   weights for the routine 80%, frontier only when confidence says the cheap model can't
+   hold it. `glam route "<task>"` shows you the decision, offline, before any money moves.
+2. **It bills like a meter, not a faith commitment.** `--max-usd` is a hard ceiling that
+   genuinely stops a run mid‑task (checked every turn, honest partial cost on interrupt).
+   Every run lands in a local ledger — `glam usage` shows spend by day, model, provider,
+   with monthly budget warnings.
+3. **Your context is a file on your disk.** The brain is SQLite you own — exportable to
+   human‑readable JSONL and back, bit‑exact, tested. The memory that makes an agent good
+   at *your* work stays yours when the model underneath changes.
+4. **Models are swappable parts.** Each model family gets a conformance‑tested adapter —
+   the per‑model tuning that normally makes migration a rewrite is done once, in the open,
+   gated by tests. Adding DeepSeek V4 to your routing was one TOML line, not a migration.
+5. **It watches the market so you don't.** `glam models` is a live catalog of top
+   open‑weight models across respected US hosts — real prices with as‑of dates;
+   `--refresh` pulls current prices and calls out drops.
+
+### Why now — the two advancements underneath
+
+glamfire defaults to **GLM 5.2 on Fireworks AI**, but neither is the point. They are
+stand‑ins for two shifts that just changed what "adopting AI" means:
+
+- **Open weights hit frontier class.** GLM 5.2, DeepSeek V4, Kimi K2.7, Qwen3‑Coder —
+  MIT/Apache‑licensed, benchmark‑proven at the center of real work. The winner changes
+  monthly; the *fact* of frontier‑class open weights doesn't.
+- **Respected on‑demand inference got cheap.** Fireworks, Together, and peers rent those
+  models by the token — FP8, US‑hosted, no contract, prices decaying in weeks.
+
+Put together: **intelligence is now a commodity market.** What nobody hands you is the
+buyer's side of that market — the work system that exploits interchangeable suppliers
+instead of marrying one. That's glamfire: routing, metering, owned context, and tested
+switching, as one open Apache‑2.0 harness.
+
+### Where it fits (tools you may already use)
+
+| You use | It is | glamfire, next to it |
+|---|---|---|
+| **Claude Code** | the best frontier coding agent | Keep it for the hard edge. glamfire routes the routine center of your workload to open models at a fifth to a thirtieth of the price, with frontier as an **earned escalation** — plus hard budget stops and a local spend ledger, which no single‑vendor agent gives you. |
+| **opencode & other OSS agents** | pick‑a‑model agent CLIs | There *you* pick one model per session. glamfire picks **per task** — by price, capability, and confidence — and switching families is conformance‑tested, not vibes. |
+| **Ollama / vLLM** | run open weights yourself | A model server is not a work system. glamfire is the loop + routing + ledger on top: point an adapter at your vLLM endpoint, or rent the same weights FP8 serverless when your laptop can't hold a 753B MoE. |
+| **OpenRouter** | one API key for many models | A gateway routes **requests you already wrote** to a model you already chose. glamfire routes **tasks**, and owns the agent loop, context store, budgets, and verification around them. |
+| **A single open model (Hermes, GLM, DeepSeek…)** | a frontier‑class brain, free | A brain in a jar. glamfire is the jar‑opener: the harness that turns raw weights into a working, budgeted, tool‑using agent — and lets you swap the brain later. |
+| **Goose** | model‑agnostic OSS agent | Closest cousin, honestly. glamfire's wedge: **automatic cost/capability routing**, an owned portable context layer guaranteed by test, and per‑model conformance gates. |
+
+### Five things to do with it this week
+
+1. **Halve your coding‑agent bill without firing Claude.** Send the routine work —
+   changelogs, dep bumps, repo explanations, first‑pass docs — through `glam run` at open‑model
+   prices; keep your frontier subscription for the tasks that deserve it. The ledger shows
+   what you actually saved.
+2. **Put a real ceiling on an agent.** `glam run "…" --max-usd 0.10` stops mid‑run when
+   the meter hits the cap — not a warning, a stop. Ctrl‑C aborts the in‑flight request and
+   prints the honest partial cost.
+3. **Meter a team.** Every run is a line in `~/.glam/usage.jsonl`. `glam usage` breaks
+   spend down by day/model/provider; set `[usage] monthlyBudgetUsd` and get warned at 80%.
+4. **Read the market in one command.** `glam models --sort price` — the current open‑weight
+   landscape with real prices and dates; `--refresh` diffs live provider prices and flags drops.
+5. **Fire‑drill your continuity.** Add a routing rule that prefers DeepSeek V4 or Kimi, and
+   prove to yourself the same task completes when your primary provider is down. 2026 already
+   showed frontier access can vanish for weeks — the teams that shrugged owned their routing.
+
+---
+
+## What glamfire is (the architecture)
 
 A **model‑agnostic, agent‑agnostic harness**, built as a TypeScript monorepo. Three
 load‑bearing subsystems:
