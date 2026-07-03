@@ -4,6 +4,20 @@ All notable changes to this project are documented here. Based on the real git
 history; newest versions first. This project adheres to
 [Keep a Changelog](https://keepachangelog.com/).
 
+## v0.7.0
+
+- **feat(adapters): the self-host tier is real** — a `local` adapter for any
+  OpenAI-compatible server (Ollama, vLLM, LM Studio, SGLang, DwarfStar/DS4):
+  user-declared capabilities and context window (the router's capability floor —
+  never guessed), $0 default pricing (overridable, never invented), an explicit
+  note when a server reports no token usage, and byte-exact tool-call ID replay
+  promoted into the shared conformance battery for every adapter. New
+  `glam run --local` / `routing.localOnly` fail loud rather than silently
+  falling back to a hosted provider. Catalog gains ollama/vllm/lmstudio rows
+  plus dwarfstar-ds4 and ornith-1.0-9b/35b with honest beta/unverified flags.
+  Live-verified against a real Ollama daemon: keyless `glam run` tool
+  round-trip at `cost: $0.000000`. (#25)
+
 ## v0.6.0
 
 - **feat(proxy): `glam serve` — the router-as-proxy gateway.** A local
