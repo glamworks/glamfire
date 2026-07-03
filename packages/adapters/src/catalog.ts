@@ -120,10 +120,10 @@ export const BUILTIN_CATALOG: CatalogEntry[] = [
     asOf: '2026-07-03',
     sourceUrl: 'https://docs.fireworks.ai/serverless/pricing',
     notes:
-      'DeepSeek adapter target. 1.6T total / 49B active; 384K max output; tool ' +
-      'calling verified on Fireworks; batch 50% off. First-party DeepSeek API ' +
-      'is cheaper but China-hosted (excluded by default). No glamfire adapter ' +
-      'wired yet — informational.',
+      'Primary DeepSeek host — adapter wired and live-verified (parallel tool ' +
+      'calls + seed, real glam run round-trip). 1.6T total / 49B active; 384K ' +
+      'max output; batch 50% off. First-party DeepSeek API is cheaper but ' +
+      'China-hosted (excluded by default).',
   },
   {
     model: 'deepseek-v4-flash',
@@ -139,8 +139,9 @@ export const BUILTIN_CATALOG: CatalogEntry[] = [
     asOf: '2026-07-03',
     sourceUrl: 'https://docs.fireworks.ai/serverless/pricing',
     notes:
-      'Cheapest capable 1M-context model; 284B total / 13B active MoE; 384K ' +
-      'max output. Batch = 50% of serverless. No glamfire adapter wired yet.',
+      'Budget tier — adapter wired and live-verified (real cache-hit run at ' +
+      '$0.028/1M cached). 284B total / 13B active MoE; 384K max output. Batch ' +
+      '= 50% of serverless. No Fireworks priority tier — requesting it fails loud.',
   },
   {
     model: 'minimax-m3',
@@ -246,8 +247,10 @@ export const BUILTIN_CATALOG: CatalogEntry[] = [
     asOf: '2026-07-03',
     sourceUrl: 'https://www.together.ai/models/deepseek-v4-pro',
     notes:
-      'Cross-family fallback host. FP4+FP8 mixed precision at 512K (vs 1M ' +
-      'FP8 on Fireworks). No glamfire adapter wired yet — informational.',
+      'Cross-family fallback host — adapter wired (live call pending ' +
+      'TOGETHER_API_KEY). FP4+FP8 mixed precision at 512K (vs 1M FP8 on ' +
+      'Fireworks). Launch blog said $2.10/$4.40; the live model page price ' +
+      'shown here wins — reconcile against the first real invoice.',
   },
   // --- DeepInfra (FP4 cost floor; no adapter wired) ---------------------------
   {

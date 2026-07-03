@@ -161,10 +161,13 @@ describe('DeepSeek-V4-Pro on Together (secondary DeepSeek host, research/25)', (
     expect(caps.parallelToolCalls).toBe(true);
   });
 
-  it('prices at Together list ($2.10/$0.20/$4.40) with the 10.5x cache discount', () => {
+  it('prices through the catalog row (Together model page: $1.74/$0.20/$3.48)', () => {
+    // Sources conflict (launch blog said $2.10/$4.40); the live model page —
+    // recorded in catalog.ts with asOf+sourceUrl — wins, and the adapter must
+    // bill exactly what `glam models` shows. Reconcile on first real invoice.
     const adapter = createTogetherAdapter(deepseekConfig);
     const usage: Usage = { inputTokens: 310, cachedInputTokens: 248, outputTokens: 47 };
-    const expected = (62 * 2.1 + 248 * 0.2 + 47 * 4.4) / 1_000_000;
+    const expected = (62 * 1.74 + 248 * 0.2 + 47 * 3.48) / 1_000_000;
     expect(adapter.pricing(usage)).toBeCloseTo(expected, 12);
   });
 
