@@ -3,7 +3,7 @@
 // so "the version is in the product's output" (SPEC §9) is always true and never drifts.
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -12,6 +12,9 @@ export function getVersion() {
   return readFileSync(join(root, 'VERSION'), 'utf8').trim();
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Main-module check via pathToFileURL: naive `file://${argv[1]}` string-building
+// never matches on Windows (backslashes, file:///D:/ drive form), which made
+// `node scripts/version.mjs` print nothing there.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.stdout.write(`${getVersion()}\n`);
 }

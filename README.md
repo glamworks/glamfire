@@ -153,7 +153,7 @@ node packages/cli/src/index.mjs --version
 ```
 
 > **What's live.** **All four package managers are wired and shipping.** The
-> [`glamfire`](https://www.npmjs.com/package/glamfire) npm package (latest: `0.4.0`) is
+> [`glamfire`](https://www.npmjs.com/package/glamfire) npm package (latest: `0.4.1`) is
 > published — verified by installing from the public registry and running the installed
 > `glam`; the [Homebrew tap](https://github.com/glamworks/homebrew-tap)
 > (`Formula/glamfire.rb`) and [Scoop bucket](https://github.com/glamworks/scoop-bucket)

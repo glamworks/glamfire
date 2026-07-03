@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Based on the real git
 history; newest versions first. This project adheres to
 [Keep a Changelog](https://keepachangelog.com/).
 
+## v0.4.1
+
+- **fix(scripts):** `version.mjs` main-module guard used naive `file://` string
+  concatenation, which never matches on Windows — `node scripts/version.mjs` printed
+  nothing there (surfaced by the new doctor install-check test on Windows CI). Now
+  compares via `pathToFileURL`.
+
 ## v0.4.0
 
 - **feat(usage):** local usage ledger (`~/.glam/usage.jsonl`) — every `glam run` records
