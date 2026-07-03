@@ -6,6 +6,21 @@
 // (./conformance).
 
 export {
+  BUILTIN_CATALOG,
+  CATALOG_PROVIDERS,
+  catalogEntry,
+  catalogEntrySchema,
+  catalogKey,
+  catalogPriceRow,
+  diffCatalogs,
+  mergeCatalogs,
+  validateCatalogEntry,
+  type CatalogEntry,
+  type CatalogPriceRow,
+  type CatalogProvider,
+  type PriceChange,
+} from './catalog.js';
+export {
   OpenAICompatibleAdapter,
   StreamAccumulator,
   parseSSE,

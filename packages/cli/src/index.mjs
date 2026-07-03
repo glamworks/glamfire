@@ -21,7 +21,7 @@ for (const s of [process.stdout, process.stderr]) {
 
 const VERSION = getVersion();
 const BANNER = `glamfire ${VERSION}  ·  the open harness for the last mile of AI`;
-const COMMANDS = ['run', 'route', 'usage', 'config', 'doctor', 'version', 'help'];
+const COMMANDS = ['run', 'route', 'usage', 'models', 'config', 'doctor', 'version', 'help'];
 
 const HELP = `${BANNER}
 
@@ -31,6 +31,8 @@ Commands:
   run "<prompt>"     Run a task against GLM 5.2 on Fireworks (real inference)
   route "<prompt>"   Show how a task would be routed (offline, no provider call)
   usage              Show spend/token usage from the local ledger (offline)
+  models             Show the model/provider landscape: prices, quant, context
+                     (--refresh pulls current prices from provider APIs)
   config             Show the resolved, layered, secret-redacted configuration
   version            Print the glamfire version
   doctor             Check the local environment is ready to run glamfire
@@ -82,6 +84,10 @@ async function main(argv) {
   if (first === 'usage') {
     const { cmdUsage } = await import('./usage.mjs');
     return cmdUsage(args.slice(1), { version: VERSION });
+  }
+  if (first === 'models') {
+    const { cmdModels } = await import('./models.mjs');
+    return cmdModels(args.slice(1), { version: VERSION });
   }
 
   const kind = first.startsWith('-') ? 'option' : 'command';

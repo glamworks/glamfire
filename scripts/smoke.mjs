@@ -151,6 +151,14 @@ check('glam help lists the route command', () => {
   if (!out.includes('route')) throw new Error('help missing route command');
 });
 
+check('glam help lists the models command and models --help documents refresh', () => {
+  const out = run('help');
+  if (!out.includes('models')) throw new Error('help missing models command');
+  const modelsHelp = run('models', '--help');
+  if (!modelsHelp.includes('--refresh')) throw new Error('models help missing --refresh');
+  if (!modelsHelp.includes('--capable')) throw new Error('models help missing --capable');
+});
+
 check('glam route --help shows the offline routing usage', () => {
   const out = run('route', '--help');
   if (!out.includes('glam route')) throw new Error('missing route usage header');
@@ -212,6 +220,82 @@ check('glam route --json emits valid structured output offline', () => {
     throw new Error('confidence must be a number');
   }
   if (typeof parsed.report?.savedUsd !== 'number') throw new Error('report.savedUsd missing');
+});
+
+// --- glam models: the evergreen model/provider landscape (no key needed) ------
+// The built-in catalog must render offline: a fresh human on a laptop with no
+// API key can still see the whole landscape (prices carry their asOf dates).
+
+function runModels(args, extraEnv = {}) {
+  // Hermetic HOME so a developer's real ~/.glam/cache/models.json (from a
+  // previous --refresh) cannot leak into the assertions; strip provider keys.
+  const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-models-'));
+  try {
+    const {
+      FIREWORKS_API_KEY: _f,
+      TOGETHER_API_KEY: _t,
+      ANTHROPIC_API_KEY: _a,
+      ...env
+    } = process.env;
+    return execFileSync('node', [cli, 'models', ...args], {
+      encoding: 'utf8',
+      env: { ...env, HOME: dir, USERPROFILE: dir, ...extraEnv },
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+check('glam models renders the built-in catalog offline (no API key)', () => {
+  const out = runModels([]);
+  if (!out.includes(`glamfire ${VERSION}`)) throw new Error('models header missing version');
+  if (!out.includes('built-in catalog')) throw new Error('missing catalog-source note');
+  if (!/glm-5\.2\s+fireworks\s+\$1\.40\s+\$4\.40\s+FP8/.test(out)) {
+    throw new Error('default workhorse row (GLM 5.2 @ fireworks, FP8) missing');
+  }
+  if (!/glm-5\.2\s+together\s+\$1\.40\s+\$4\.40\s+FP4/.test(out)) {
+    throw new Error('Together GLM FP4 caveat row missing');
+  }
+  if (!out.includes('AS-OF')) throw new Error('asOf column missing');
+  if (!out.includes('2026-')) throw new Error('asOf dates missing');
+});
+
+check('glam models --json emits the structured catalog', () => {
+  const parsed = JSON.parse(runModels(['--json']));
+  if (parsed.source !== 'builtin') throw new Error('expected builtin source offline');
+  if (!Array.isArray(parsed.entries) || parsed.entries.length < 10) {
+    throw new Error('expected a broad catalog (>=10 entries)');
+  }
+  for (const e of parsed.entries) {
+    for (const field of ['model', 'provider', 'endpoint', 'contextK', 'asOf', 'sourceUrl']) {
+      if (e[field] === undefined) throw new Error(`entry missing ${field}`);
+    }
+  }
+});
+
+check('glam models --capable and --sort price shape the view', () => {
+  const vision = JSON.parse(runModels(['--capable', 'vision', '--json']));
+  if (vision.entries.length === 0) throw new Error('no vision-capable models');
+  if (!vision.entries.every((e) => e.capabilities.includes('vision'))) {
+    throw new Error('--capable vision leaked a non-vision model');
+  }
+  const sorted = JSON.parse(runModels(['--sort', 'price', '--json']));
+  const first = sorted.entries[0];
+  if (first.usdPerMInput + first.usdPerMOutput > 1) {
+    throw new Error('--sort price should surface the cheapest model first');
+  }
+});
+
+check('glam models --refresh without any provider key degrades honestly (exit 1)', () => {
+  try {
+    runModels(['--refresh']);
+    throw new Error('expected non-zero exit');
+  } catch (err) {
+    if (err.status !== 1) throw new Error(`expected exit 1, got ${err.status}`);
+    const text = String(err.stdout ?? '') + String(err.stderr ?? '');
+    if (!text.includes('nothing could be refreshed')) throw new Error('missing honest notice');
+    if (!text.includes('TOGETHER_API_KEY')) throw new Error('missing key guidance');
+  }
 });
 
 check('glam run without FIREWORKS_API_KEY fails with actionable guidance', () => {

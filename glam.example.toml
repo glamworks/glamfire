@@ -18,6 +18,14 @@ model = "accounts/fireworks/models/glm-5p2"
 
 # ---------------------------------------------------------------------------
 # Providers — base URL, known model ids, and credential *reference* per provider.
+#
+# Wondering what to list here? Run `glam models` — the evergreen landscape view
+# of top open-weight models across respected US-hosted providers, with USD/1M
+# prices, served quantization (FP8 vs FP4 caveats), context windows, capability
+# tokens, and the date each price was verified. `glam models --refresh` pulls
+# CURRENT prices from provider model APIs (needs the provider key) and reports
+# changes explicitly; the adapters price from the very same catalog, so routing
+# cost decisions and this view can never drift apart.
 # ---------------------------------------------------------------------------
 [providers.fireworks]
 baseUrl = "https://api.fireworks.ai/inference/v1"

@@ -8,7 +8,9 @@
 // capability surface, the service-tier pricing table, and the Fireworks knobs
 // (`reasoning_effort`, `service_tier`). The public API is unchanged.
 
+import { GLM_DEFAULT_MODEL } from '@glamfire/config';
 import type { Capabilities, Usage } from '@glamfire/engine';
+import { catalogPriceRow } from './catalog.js';
 import type { FireworksConfig } from './config.js';
 import { OpenAICompatibleAdapter } from './openai-compatible.js';
 
@@ -21,17 +23,27 @@ export {
   type WireStreamChunk,
 } from './openai-compatible.js';
 
-// --- pricing (research/02), USD per 1M tokens: input / cached-input / output --
+// --- pricing, USD per 1M tokens: input / cached-input / output ---------------
+// The STANDARD (default) row derives from the shared model/provider catalog
+// (./catalog.ts — the single source of truth `glam models` renders), so the
+// router's cost model and the landscape view can never drift apart. The other
+// tiers are the live Fireworks serverless tier prices, verified 2026-07-03
+// against https://docs.fireworks.ai/serverless/pricing.
 interface PriceRow {
   input: number;
   cached: number;
   output: number;
 }
+const STANDARD_ROW = catalogPriceRow('fireworks', GLM_DEFAULT_MODEL);
 const PRICING: Record<FireworksConfig['serviceTier'], PriceRow> = {
-  standard: { input: 1.4, cached: 0.14, output: 4.4 },
+  standard: STANDARD_ROW,
   priority: { input: 1.75, cached: 0.18, output: 5.5 },
-  // Fast ≈ 2× Standard; Background ≈ ¼ Standard.
-  fast: { input: 2.8, cached: 0.28, output: 8.8 },
+  // Live-verified 2026-07-03: fast is 1.5x standard (the older "≈2x" estimate
+  // from research/02 was stale — evergreen catalog discipline caught it).
+  fast: { input: 2.1, cached: 0.21, output: 6.6 },
+  // Background maps to the wire "flex" tier; Fireworks publishes no distinct
+  // flex per-token row (the docs list batch at 50% of standard). ≈¼-standard
+  // is the research/02 estimate, kept pending a published number.
   background: { input: 0.35, cached: 0.035, output: 1.1 },
 };
 

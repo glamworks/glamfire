@@ -27,24 +27,31 @@ import type {
   Usage,
 } from '@glamfire/engine';
 import type { AnthropicConfig } from './anthropic-config.js';
+import { catalogPriceRow } from './catalog.js';
 
 // --- pricing (real Claude list prices), USD per 1M tokens: input / output -----
 // Cache reads bill at ~0.1x input; cache writes (folded into `inputTokens` on
 // decode) bill at ~1.25x input — we price the fresh+write bucket at the input
 // rate, which is faithful to within the write premium.
+// The current-generation rows derive from the shared model/provider catalog
+// (./catalog.ts — the single source of truth `glam models` renders); the
+// remaining rows are the same-tier aliases Anthropic prices identically.
 interface PriceRow {
   input: number;
   output: number;
 }
 const CACHE_READ_FACTOR = 0.1;
+const opusRow = catalogPriceRow('anthropic', 'claude-opus-4-8');
+const sonnetRow = catalogPriceRow('anthropic', 'claude-sonnet-4-6');
+const haikuRow = catalogPriceRow('anthropic', 'claude-haiku-4-5');
 const PRICING: Record<string, PriceRow> = {
-  'claude-opus-4-8': { input: 5, output: 25 },
-  'claude-opus-4-7': { input: 5, output: 25 },
-  'claude-opus-4-6': { input: 5, output: 25 },
-  'claude-opus-4-5': { input: 5, output: 25 },
-  'claude-sonnet-4-6': { input: 3, output: 15 },
-  'claude-sonnet-4-5': { input: 3, output: 15 },
-  'claude-haiku-4-5': { input: 1, output: 5 },
+  'claude-opus-4-8': { input: opusRow.input, output: opusRow.output },
+  'claude-opus-4-7': { input: opusRow.input, output: opusRow.output },
+  'claude-opus-4-6': { input: opusRow.input, output: opusRow.output },
+  'claude-opus-4-5': { input: opusRow.input, output: opusRow.output },
+  'claude-sonnet-4-6': { input: sonnetRow.input, output: sonnetRow.output },
+  'claude-sonnet-4-5': { input: sonnetRow.input, output: sonnetRow.output },
+  'claude-haiku-4-5': { input: haikuRow.input, output: haikuRow.output },
   'claude-fable-5': { input: 10, output: 50 },
 };
 const DEFAULT_PRICE: PriceRow = PRICING['claude-opus-4-8'] as PriceRow;
