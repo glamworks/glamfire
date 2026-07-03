@@ -15,6 +15,7 @@
 // routing/quality expectations are explicit. Pricing is per 1M tokens.
 
 import type { Capabilities, Usage } from '@glamfire/engine';
+import { catalogPriceRow } from './catalog.js';
 import { OpenAICompatibleAdapter } from './openai-compatible.js';
 import { TOGETHER_GLM_MODEL, TOGETHER_QWEN_MODEL, type TogetherConfig } from './together-config.js';
 
@@ -74,19 +75,20 @@ export const TOGETHER_MODELS: Record<string, TogetherModelInfo> = {
     // Fireworks/Baseten FP8 baseline. Surfaced as an honesty caveat for routing.
     quantization: 'FP4',
     thinking: true,
-    // research/23 §2 (Together GLM-5.2 model page): $1.40 in / $0.26 cached / $4.40 out.
-    pricing: { input: 1.4, cached: 0.26, output: 4.4 },
+    // Derived from the shared model/provider catalog (./catalog.ts) — the
+    // single source of truth `glam models` renders, re-verified 2026-07-03
+    // against the Together GLM-5.2 model page ($1.40 / $0.26 cached / $4.40).
+    pricing: catalogPriceRow('together', TOGETHER_GLM_MODEL),
   },
   [TOGETHER_QWEN_MODEL]: {
     capabilities: QWEN_CAPABILITIES,
     quantization: 'FP8',
     thinking: false,
-    // research/23 §1: Qwen reference serverless list is $0.11 in / $0.80 out.
-    // Together serves Qwen3-Coder-Next via a DEDICATED endpoint (not turnkey
-    // serverless), so the per-token rate can vary by deployment; cache reads are
-    // modeled at ~0.1x input (the common prefix-cache convention) — verify
-    // against the live dedicated-endpoint invoice (see MANUAL-VERIFY.md).
-    pricing: { input: 0.11, cached: 0.011, output: 0.8 },
+    // Derived from the shared catalog. CAVEAT recorded there too: Together
+    // serves Qwen3-Coder-Next via a DEDICATED endpoint (not turnkey
+    // serverless); this is Qwen's reference serverless list price — verify a
+    // dedicated deployment against the live invoice (research/23 §1).
+    pricing: catalogPriceRow('together', TOGETHER_QWEN_MODEL),
   },
 };
 

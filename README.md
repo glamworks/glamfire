@@ -180,7 +180,20 @@ every release.)
   loop**. `glam route "<prompt>"` prints the decision + a **distribution report** ($ saved
   vs always‑frontier) with **no API key and no provider call**; `glam run --explain` shows
   the live decision. Wired into the engine via a neutral `RouterHook`.
-- **Cross‑platform installability without cloning** (SPEC §7), **built and verified
+- **`glam models`** — the **evergreen model/provider landscape** (SPEC §5.3/§5.4):
+  a built‑in, dated catalog of top open‑weight models across respected US‑hosted
+  providers (Fireworks, Together, DeepInfra, Mistral) plus the Claude escalation tier,
+  with **USD/1M prices, served quantization (FP8 vs FP4 caveats recorded per
+  provider×model), context windows, capability tokens, license, `asOf` verification
+  date, and source URL on every entry**. Filter with `--capable`, sort cheapest‑first
+  with `--sort price`, get JSON with `--json` — all offline, no key. `glam models
+  --refresh` pulls **current** data from provider model APIs (Together prices are
+  machine‑readable; Fireworks exposes availability/context but **no machine‑readable
+  prices — the command says so instead of faking freshness**), reports every price
+  movement explicitly (`↓ was $X now $Y since <asOf>`), and caches the refreshed view
+  under `~/.glam/cache/models.json` (used automatically when newer). **Single source
+  of truth:** the adapters' pricing rows derive from this same catalog, so the
+  router's cost decisions and the landscape view can never drift apart.
   end‑to‑end**: the `glam` CLI bundles to a self‑contained **`glamfire` npm package**
   (one file, no `workspace:*` deps, no native modules — `npm i -g` then run the
   installed binary, proven by packing the tarball, global‑installing it, and running
