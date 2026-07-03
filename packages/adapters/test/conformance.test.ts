@@ -1,13 +1,18 @@
 // The SAME conformance battery, run against EVERY adapter using each provider's
-// captured real wire fixtures: fireworks-glm (GLM-5.2), together (GLM-5.2 FP4 +
-// Qwen3-Coder-Next FP8 on Together AI), and anthropic (Claude). This is the gate
+// captured real wire fixtures: fireworks-glm (GLM-5.2 + DeepSeek-V4-Pro +
+// DeepSeek-V4-Flash), together (GLM-5.2 FP4 + Qwen3-Coder-Next FP8 +
+// DeepSeek-V4-Pro on Together AI), and anthropic (Claude). This is the gate
 // from SPEC §5.4: a model/adapter is "supported" only when this is green. See
-// ../conformance/README.md.
+// ../conformance/README.md. The deepseek-* fixtures were captured LIVE from
+// Fireworks (scripts/capture-deepseek-fixtures.mjs, 2026-07-03).
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  FIREWORKS_DEEPSEEK_FLASH_MODEL,
+  FIREWORKS_DEEPSEEK_PRO_MODEL,
+  TOGETHER_DEEPSEEK_MODEL,
   TOGETHER_GLM_MODEL,
   TOGETHER_QWEN_MODEL,
   createAnthropicAdapter,
@@ -142,6 +147,126 @@ runConformance(() => {
   };
 });
 
+// --- fireworks-glm / DeepSeek-V4-Pro (FP8): LIVE-captured Fireworks fixtures ---
+// Every fixture below is a real Fireworks wire capture (2026-07-03, temperature
+// 0, seed 42) recorded through the adapter's own encodeRequest by
+// scripts/capture-deepseek-fixtures.mjs.
+runConformance(() => {
+  const config = resolveFireworksConfig(
+    { FIREWORKS_API_KEY: 'test-key' },
+    { model: FIREWORKS_DEEPSEEK_PRO_MODEL },
+  );
+  return {
+    adapter: createFireworksGlmAdapter(config),
+    sampleState: sampleState(config.model),
+    inspectRequest: inspectFireworksRequest,
+    toolCallCompletion: {
+      raw: json('deepseek-pro-completion-toolcall.json'),
+      text: '',
+      reasoning: 'The user wants me to calculate (2 + 3) * 4 using the calculator tool.',
+      toolCalls: [
+        {
+          id: 'chatcmpl-tool-b645c877c07de022',
+          name: 'calculator',
+          arguments: { expression: '(2 + 3) * 4' },
+        },
+      ],
+      finishReason: 'tool_calls',
+      usage: { inputTokens: 299, cachedInputTokens: 0, outputTokens: 72 },
+    },
+    multiToolCompletion: {
+      raw: json('deepseek-pro-completion-multitool.json'),
+      text: '',
+      toolCalls: [
+        {
+          id: 'chatcmpl-tool-a91a25832c0f6e47',
+          name: 'get_weather',
+          arguments: { city: 'Paris' },
+        },
+        {
+          id: 'chatcmpl-tool-ac9cf81a182d637b',
+          name: 'get_weather',
+          arguments: { city: 'London' },
+        },
+      ],
+      finishReason: 'tool_calls',
+      usage: { inputTokens: 311, cachedInputTokens: 0, outputTokens: 104 },
+    },
+    jsonCompletion: {
+      raw: json('deepseek-pro-completion-json.json'),
+      expectJson: { answer: 20, unit: 'none' },
+    },
+    reduceToolCallStream: () =>
+      reduceStream(parseSSE(fixture('deepseek-pro-stream-toolcall.sse.txt'))),
+    reduceTextStream: () => reduceStream(parseSSE(fixture('deepseek-pro-stream-text.sse.txt'))),
+    expectStreamToolCall: {
+      name: 'calculator',
+      arguments: { expression: '(2 + 3) * 4' },
+      finishReason: 'tool_calls',
+    },
+    expectStreamText: { textIncludes: 'equals 20', finishReason: 'stop' },
+  };
+}, 'DeepSeek-V4-Pro · FP8');
+
+// --- fireworks-glm / DeepSeek-V4-Flash (FP8): LIVE-captured Fireworks fixtures --
+runConformance(() => {
+  const config = resolveFireworksConfig(
+    { FIREWORKS_API_KEY: 'test-key' },
+    { model: FIREWORKS_DEEPSEEK_FLASH_MODEL },
+  );
+  return {
+    adapter: createFireworksGlmAdapter(config),
+    sampleState: sampleState(config.model),
+    inspectRequest: inspectFireworksRequest,
+    toolCallCompletion: {
+      raw: json('deepseek-flash-completion-toolcall.json'),
+      text: '',
+      reasoning:
+        'The user wants me to calculate (2 + 3) * 4 using the calculator tool. Let me do that.',
+      toolCalls: [
+        {
+          id: 'chatcmpl-tool-9b0adf3caecba45d',
+          name: 'calculator',
+          arguments: { expression: '(2 + 3) * 4' },
+        },
+      ],
+      finishReason: 'tool_calls',
+      usage: { inputTokens: 299, cachedInputTokens: 0, outputTokens: 77 },
+    },
+    multiToolCompletion: {
+      raw: json('deepseek-flash-completion-multitool.json'),
+      text: '',
+      toolCalls: [
+        {
+          id: 'chatcmpl-tool-a50c7c40fef2e545',
+          name: 'get_weather',
+          arguments: { city: 'Paris' },
+        },
+        {
+          id: 'chatcmpl-tool-9b678ebc871900f8',
+          name: 'get_weather',
+          arguments: { city: 'London' },
+        },
+      ],
+      finishReason: 'tool_calls',
+      usage: { inputTokens: 311, cachedInputTokens: 0, outputTokens: 106 },
+    },
+    jsonCompletion: {
+      raw: json('deepseek-flash-completion-json.json'),
+      expectJson: { answer: 20, unit: 'none' },
+    },
+    reduceToolCallStream: () =>
+      reduceStream(parseSSE(fixture('deepseek-flash-stream-toolcall.sse.txt'))),
+    reduceTextStream: () => reduceStream(parseSSE(fixture('deepseek-flash-stream-text.sse.txt'))),
+    expectStreamToolCall: {
+      name: 'calculator',
+      arguments: { expression: '(2 + 3) * 4' },
+      finishReason: 'tool_calls',
+    },
+    expectStreamText: { textIncludes: 'equals 20', finishReason: 'stop' },
+  };
+}, 'DeepSeek-V4-Flash · FP8');
+
 // --- together / GLM-5.2 (FP4): OpenAI-compatible, same wire extraction --------
 runConformance(() => {
   const config = resolveTogetherConfig(
@@ -235,6 +360,56 @@ runConformance(() => {
     expectStreamText: { textIncludes: 'equals 20', finishReason: 'stop' },
   };
 }, 'Qwen3-Coder-Next · FP8');
+
+// --- together / DeepSeek-V4-Pro (native FP4+FP8): secondary DeepSeek host -----
+// Exact Together OpenAI-compatible wire format (same shape as the together-glm
+// fixtures); refresh from a live capture once a TOGETHER_API_KEY exists
+// (scripts/capture-together-fixture.mjs deepseek).
+runConformance(() => {
+  const config = resolveTogetherConfig(
+    { TOGETHER_API_KEY: 'test-key' },
+    { model: TOGETHER_DEEPSEEK_MODEL },
+  );
+  return {
+    adapter: createTogetherAdapter(config),
+    sampleState: sampleState(config.model),
+    inspectRequest: inspectFireworksRequest,
+    toolCallCompletion: {
+      raw: json('together-deepseek-completion-toolcall.json'),
+      text: "I'll compute that.",
+      reasoning: 'Need to evaluate (2 + 3) * 4 with the calculator.',
+      toolCalls: [
+        { id: 'call_tg_ds_abc123', name: 'calculator', arguments: { expression: '(2 + 3) * 4' } },
+      ],
+      finishReason: 'tool_calls',
+      usage: { inputTokens: 495, cachedInputTokens: 102, outputTokens: 44 },
+    },
+    multiToolCompletion: {
+      raw: json('together-deepseek-completion-multitool.json'),
+      text: 'Let me check both cities.',
+      toolCalls: [
+        { id: 'call_tg_ds_paris', name: 'get_weather', arguments: { city: 'Paris' } },
+        { id: 'call_tg_ds_london', name: 'get_weather', arguments: { city: 'London' } },
+      ],
+      finishReason: 'tool_calls',
+      usage: { inputTokens: 528, cachedInputTokens: 0, outputTokens: 83 },
+    },
+    jsonCompletion: {
+      raw: json('together-deepseek-completion-json.json'),
+      expectJson: { answer: 20, unit: 'none' },
+    },
+    reduceToolCallStream: () =>
+      reduceStream(parseSSE(fixture('together-deepseek-stream-toolcall.sse.txt'))),
+    reduceTextStream: () =>
+      reduceStream(parseSSE(fixture('together-deepseek-stream-text.sse.txt'))),
+    expectStreamToolCall: {
+      name: 'calculator',
+      arguments: { expression: '(2 + 3) * 4' },
+      finishReason: 'tool_calls',
+    },
+    expectStreamText: { textIncludes: 'equals 20', finishReason: 'stop' },
+  };
+}, 'DeepSeek-V4-Pro');
 
 runConformance(() => {
   const config = resolveAnthropicConfig({ ANTHROPIC_API_KEY: 'test-key' });

@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  TOGETHER_DEEPSEEK_MODEL,
   TOGETHER_GLM_MODEL,
   TOGETHER_QWEN_MODEL,
   type TogetherConfig,
@@ -31,6 +32,10 @@ const glmConfig: TogetherConfig = resolveTogetherConfig(
 const qwenConfig: TogetherConfig = resolveTogetherConfig(
   { TOGETHER_API_KEY: 'test-key' },
   { model: TOGETHER_QWEN_MODEL },
+);
+const deepseekConfig: TogetherConfig = resolveTogetherConfig(
+  { TOGETHER_API_KEY: 'test-key' },
+  { model: TOGETHER_DEEPSEEK_MODEL },
 );
 
 describe('streaming: GLM-5.2 on Together (thinking, fragmented tool args)', () => {
@@ -139,6 +144,54 @@ describe('per-model capabilities, quantization, and pricing (research/23)', () =
     const qwen = createTogetherAdapter(qwenConfig).pricing(usage);
     expect(qwen).toBeGreaterThan(0);
     expect(qwen).toBeLessThan(glm);
+  });
+});
+
+describe('DeepSeek-V4-Pro on Together (secondary DeepSeek host, research/25)', () => {
+  it('records the native FP4+FP8 mixed precision and thinking flag', () => {
+    const adapter = createTogetherAdapter(deepseekConfig);
+    expect(adapter.quantization).toBe('FP4+FP8');
+    expect(adapter.modelInfo.thinking).toBe(true);
+  });
+
+  it('declares the 512K context Together actually serves (not the native 1M)', () => {
+    const caps = createTogetherAdapter(deepseekConfig).capabilities;
+    expect(caps.contextWindow).toBe(524_288);
+    expect(caps.toolCalling).toBe(true);
+    expect(caps.parallelToolCalls).toBe(true);
+  });
+
+  it('prices through the catalog row (Together model page: $1.74/$0.20/$3.48)', () => {
+    // Sources conflict (launch blog said $2.10/$4.40); the live model page —
+    // recorded in catalog.ts with asOf+sourceUrl — wins, and the adapter must
+    // bill exactly what `glam models` shows. Reconcile on first real invoice.
+    const adapter = createTogetherAdapter(deepseekConfig);
+    const usage: Usage = { inputTokens: 310, cachedInputTokens: 248, outputTokens: 47 };
+    const expected = (62 * 1.74 + 248 * 0.2 + 47 * 3.48) / 1_000_000;
+    expect(adapter.pricing(usage)).toBeCloseTo(expected, 12);
+  });
+
+  it('sends reasoning_effort (thinking model) with the DeepSeek model id', () => {
+    const adapter = createTogetherAdapter(deepseekConfig);
+    const body = adapter.encodeRequest({
+      system: 'You are glamfire.',
+      task: { goal: 'compute', budget: {} },
+      messages: [{ role: 'user', content: 'hi' }],
+      tools: [],
+      config: { model: TOGETHER_DEEPSEEK_MODEL, reasoningEffort: 'high' },
+    }).body as Record<string, unknown>;
+    expect(body.model).toBe('deepseek-ai/DeepSeek-V4-Pro');
+    expect(body.reasoning_effort).toBe('high');
+    expect(body.service_tier).toBeUndefined(); // Fireworks-only knob
+  });
+
+  it('reassembles the fragmented DeepSeek tool-call stream (exact wire format)', () => {
+    const result = reduceStream(parseSSE(fixture('together-deepseek-stream-toolcall.sse.txt')));
+    expect(result.toolCalls).toHaveLength(1);
+    expect(result.toolCalls[0].id).toBe('call_tg_ds_str1');
+    expect(result.toolCalls[0].arguments).toEqual({ expression: '(2 + 3) * 4' });
+    expect(result.reasoning).toContain('calculator tool');
+    expect(result.finishReason).toBe('tool_calls');
   });
 });
 

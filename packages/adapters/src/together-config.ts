@@ -25,6 +25,13 @@ export const TOGETHER_DEFAULT_BASE_URL = 'https://api.together.xyz/v1';
 export const TOGETHER_GLM_MODEL = 'zai-org/GLM-5.2';
 /** Qwen3-Coder-Next on Together (HF-style id), FP8, dedicated endpoint (research/23 §1). */
 export const TOGETHER_QWEN_MODEL = 'Qwen/Qwen3-Coder-Next';
+/**
+ * DeepSeek-V4-Pro on Together (HF-style id, research/25): the secondary US host
+ * for the DeepSeek escalation tier (primary is Fireworks). 512K context as
+ * served by Together (the model is natively 1M). Model id from Together's
+ * launch announcement; live verification pending TOGETHER_API_KEY.
+ */
+export const TOGETHER_DEEPSEEK_MODEL = 'deepseek-ai/DeepSeek-V4-Pro';
 
 export const togetherConfigSchema = z.object({
   apiKey: z.string().min(1, 'TOGETHER_API_KEY is required to call Together AI'),
@@ -100,7 +107,7 @@ export function resolveTogetherConfig(
   if (apiKey === undefined) {
     const source = describeCredentialRef(provider.credential);
     throw new Error(
-      `no Together API key: ${source} is not set (required to call GLM-5.2 / Qwen3-Coder-Next on Together AI)`,
+      `no Together API key: ${source} is not set (required to call GLM-5.2 / Qwen3-Coder-Next / DeepSeek-V4-Pro on Together AI)`,
     );
   }
 

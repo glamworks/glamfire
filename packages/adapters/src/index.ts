@@ -6,16 +6,34 @@
 // (./conformance).
 
 export {
+  BUILTIN_CATALOG,
+  CATALOG_PROVIDERS,
+  catalogEntry,
+  catalogEntrySchema,
+  catalogKey,
+  catalogPriceRow,
+  diffCatalogs,
+  mergeCatalogs,
+  validateCatalogEntry,
+  type CatalogEntry,
+  type CatalogPriceRow,
+  type CatalogProvider,
+  type PriceChange,
+} from './catalog.js';
+export {
   OpenAICompatibleAdapter,
   StreamAccumulator,
   parseSSE,
   reduceStream,
   type OpenAICompatibleSpec,
+  type ServedQuantization,
   type WireStreamChunk,
 } from './openai-compatible.js';
 export {
   FIREWORKS_DEFAULT_BASE_URL,
   FIREWORKS_DEFAULT_MODEL,
+  FIREWORKS_DEEPSEEK_FLASH_MODEL,
+  FIREWORKS_DEEPSEEK_PRO_MODEL,
   fireworksConfigSchema,
   type FireworksConfig,
   type FireworksOverrides,
@@ -23,12 +41,16 @@ export {
   resolveFireworksConfig,
 } from './config.js';
 export {
+  FIREWORKS_MODELS,
   FireworksGlmAdapter,
   createFireworksGlmAdapter,
+  fireworksModelInfo,
   fireworksWireServiceTier,
+  type FireworksModelInfo,
 } from './fireworks-glm.js';
 export {
   TOGETHER_DEFAULT_BASE_URL,
+  TOGETHER_DEEPSEEK_MODEL,
   TOGETHER_GLM_MODEL,
   TOGETHER_QWEN_MODEL,
   togetherConfigSchema,

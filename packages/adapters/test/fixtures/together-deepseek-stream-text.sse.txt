@@ -1,0 +1,13 @@
+data: {"id":"tg-ds-txt","object":"chat.completion.chunk","created":1783100100,"model":"deepseek-ai/DeepSeek-V4-Pro","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"The tool returned 20. "},"finish_reason":null}]}
+
+data: {"id":"tg-ds-txt","object":"chat.completion.chunk","created":1783100100,"model":"deepseek-ai/DeepSeek-V4-Pro","choices":[{"index":0,"delta":{"reasoning_content":"I can answer directly now."},"finish_reason":null}]}
+
+data: {"id":"tg-ds-txt","object":"chat.completion.chunk","created":1783100100,"model":"deepseek-ai/DeepSeek-V4-Pro","choices":[{"index":0,"delta":{"content":"(2 + 3) * 4 "},"finish_reason":null}]}
+
+data: {"id":"tg-ds-txt","object":"chat.completion.chunk","created":1783100100,"model":"deepseek-ai/DeepSeek-V4-Pro","choices":[{"index":0,"delta":{"content":"equals 20."},"finish_reason":null}]}
+
+data: {"id":"tg-ds-txt","object":"chat.completion.chunk","created":1783100100,"model":"deepseek-ai/DeepSeek-V4-Pro","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"id":"tg-ds-txt","object":"chat.completion.chunk","created":1783100100,"model":"deepseek-ai/DeepSeek-V4-Pro","choices":[],"usage":{"prompt_tokens":372,"completion_tokens":14,"prompt_tokens_details":{"cached_tokens":310},"total_tokens":386}}
+
+data: [DONE]

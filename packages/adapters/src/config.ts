@@ -19,6 +19,21 @@ import { z } from 'zod';
 export const FIREWORKS_DEFAULT_BASE_URL = 'https://api.fireworks.ai/inference/v1';
 /** Fireworks model id for GLM-5.2 serverless (research/02). */
 export const FIREWORKS_DEFAULT_MODEL = 'accounts/fireworks/models/glm-5p2';
+/**
+ * DeepSeek-V4-Pro on Fireworks serverless (research/25): 1.6T/49B-active MoE,
+ * MIT weights, 1M context, FP8, tool calling. Verified live against the
+ * Fireworks model API 2026-07-03 (state READY, supportsServerless,
+ * supportsTools, contextLength 1048576).
+ */
+export const FIREWORKS_DEEPSEEK_PRO_MODEL = 'accounts/fireworks/models/deepseek-v4-pro';
+/**
+ * DeepSeek-V4-Flash on Fireworks serverless (research/25): 284B/13B-active MoE,
+ * the cheapest capable 1M-context model anywhere ($0.14/$0.28). Verified live
+ * 2026-07-03 (state READY, supportsServerless, supportsTools, 1048576 ctx).
+ * NOTE: not listed by `GET /inference/v1/models` (that list is a curated
+ * subset) — the model resolves and serves on chat/completions regardless.
+ */
+export const FIREWORKS_DEEPSEEK_FLASH_MODEL = 'accounts/fireworks/models/deepseek-v4-flash';
 
 export const fireworksConfigSchema = z.object({
   apiKey: z.string().min(1, 'FIREWORKS_API_KEY is required to call Fireworks'),

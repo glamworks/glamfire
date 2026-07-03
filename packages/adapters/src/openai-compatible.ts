@@ -28,6 +28,14 @@ import type {
   Usage,
 } from '@glamfire/engine';
 
+/**
+ * Served quantization of a `{provider, model}` deployment (research/23 §3:
+ * quantization is a deployment property, not an API field — record it honestly
+ * per model). `FP4+FP8` = DeepSeek-V4's native mixed-precision release (MoE
+ * expert params FP4, everything else FP8).
+ */
+export type ServedQuantization = 'FP8' | 'FP4' | 'FP4+FP8';
+
 // --- OpenAI-compatible wire shapes (only the fields we read) -----------------
 interface WireToolCall {
   index?: number;
@@ -370,6 +378,7 @@ export class OpenAICompatibleAdapter implements StreamingAdapter {
       method: 'POST',
       headers: req.headers,
       body: JSON.stringify(req.body),
+      ...(state.signal ? { signal: state.signal } : {}),
     });
     if (!res.ok) {
       throw new Error(await providerError(res, this.spec));
@@ -384,6 +393,7 @@ export class OpenAICompatibleAdapter implements StreamingAdapter {
       method: 'POST',
       headers: req.headers,
       body: JSON.stringify(req.body),
+      ...(state.signal ? { signal: state.signal } : {}),
     });
     if (!res.ok || !res.body) {
       throw new Error(await providerError(res, this.spec));

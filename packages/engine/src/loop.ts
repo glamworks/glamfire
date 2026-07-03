@@ -60,6 +60,13 @@ export interface RunOptions {
   onStep?: (step: Step) => void;
   /** Called with streamed token events during a model turn. */
   onToken?: (ev: StreamEvent) => void;
+  /**
+   * Cooperative cancellation (SIGINT on the CLI). When aborted, the in-flight
+   * provider request is really cancelled (the signal reaches the adapter's HTTP
+   * layer) and the run finishes with status `interrupted` — accounting for every
+   * completed turn, never a fake `done`.
+   */
+  signal?: AbortSignal;
 }
 
 function composeFirstMessage(task: Task): string {
@@ -137,7 +144,13 @@ export async function runTask(opts: RunOptions): Promise<Run> {
 
   const messages: NeutralMessage[] = [{ role: 'user', content: composeFirstMessage(task) }];
 
+  const signal = opts.signal;
+
   for (let iteration = 0; ; iteration += 1) {
+    // Cooperative cancellation, honored before spending on another turn.
+    if (signal?.aborted) {
+      return finish(run.output, 'interrupted', 'interrupted');
+    }
     if (iteration >= maxSteps) {
       return finish(run.output, 'max_steps', 'budget_exhausted');
     }
@@ -153,7 +166,14 @@ export async function runTask(opts: RunOptions): Promise<Run> {
     // active config.
     const turnConfig = budgetCappedConfig(activeConfig, activeAdapter, run, task);
 
-    const state: RunState = { system, task, messages, tools: tools.list(), config: turnConfig };
+    const state: RunState = {
+      system,
+      task,
+      messages,
+      tools: tools.list(),
+      config: turnConfig,
+      ...(signal ? { signal } : {}),
+    };
 
     let result: ModelTurnResult;
     try {
@@ -161,6 +181,11 @@ export async function runTask(opts: RunOptions): Promise<Run> {
         ? await activeAdapter.stream(state, (ev: StreamEvent) => onToken(ev))
         : await activeAdapter.complete(state);
     } catch (err) {
+      // An abort mid-request is a user interrupt, not an engine failure: the
+      // adapter's fetch rejects when the signal fires. Report it honestly.
+      if (signal?.aborted) {
+        return finish(run.output, 'interrupted', 'interrupted');
+      }
       const msg = err instanceof Error ? err.message : String(err);
       return finish(`engine error: ${msg}`, 'error', 'error');
     }
@@ -171,6 +196,8 @@ export async function runTask(opts: RunOptions): Promise<Run> {
 
     emit({
       type: 'model_turn',
+      adapter: activeAdapter.id,
+      model: activeConfig.model,
       text: result.text,
       reasoning: result.reasoning,
       toolCalls: result.toolCalls,
@@ -238,6 +265,11 @@ export async function runTask(opts: RunOptions): Promise<Run> {
     }
 
     for (const call of result.toolCalls) {
+      // Stop dispatching tools the moment the user interrupts — no orphaned
+      // side effects after Ctrl-C. Completed turns stay fully accounted.
+      if (signal?.aborted) {
+        return finish(run.output || result.text, 'interrupted', 'interrupted');
+      }
       const tool = tools.get(call.name);
       if (!tool) {
         emit({

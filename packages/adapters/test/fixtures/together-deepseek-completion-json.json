@@ -1,0 +1,22 @@
+{
+  "id": "9a1d-together-ds-json-001",
+  "object": "chat.completion",
+  "model": "deepseek-ai/DeepSeek-V4-Pro",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"answer\": 20, \"unit\": \"none\"}",
+        "reasoning_content": "The user asked for a strict JSON document; emit it verbatim."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 61,
+    "completion_tokens": 27,
+    "total_tokens": 88,
+    "prompt_tokens_details": { "cached_tokens": 0 }
+  }
+}

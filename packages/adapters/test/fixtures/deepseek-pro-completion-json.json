@@ -1,0 +1,23 @@
+{
+  "id": "chatcmpl-43ea3633a7184f879ace001770a0d1d0",
+  "object": "chat.completion",
+  "created": 1783095613,
+  "model": "accounts/fireworks/models/deepseek-v4-pro",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"answer\": 20, \"unit\": \"none\"}",
+        "reasoning_content": "We are asked to respond with ONLY the exact JSON object: {\"answer\": 20, \"unit\": \"none\"}. No code fences, no prose. So I'll output that."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 46,
+    "total_tokens": 98,
+    "completion_tokens": 52,
+    "prompt_tokens_details": { "cached_tokens": 0 }
+  }
+}

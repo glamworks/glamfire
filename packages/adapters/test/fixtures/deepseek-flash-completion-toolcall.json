@@ -1,0 +1,32 @@
+{
+  "id": "chatcmpl-fec933fbb5eb4fd0a198c7cf2ecd89f4",
+  "object": "chat.completion",
+  "created": 1783095629,
+  "model": "accounts/fireworks/models/deepseek-v4-flash",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "",
+        "reasoning_content": "The user wants me to calculate (2 + 3) * 4 using the calculator tool. Let me do that.",
+        "tool_calls": [
+          {
+            "index": 0,
+            "id": "chatcmpl-tool-9b0adf3caecba45d",
+            "type": "function",
+            "function": { "name": "calculator", "arguments": "{\"expression\": \"(2 + 3) * 4\"}" },
+            "name": null
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 299,
+    "total_tokens": 376,
+    "completion_tokens": 77,
+    "prompt_tokens_details": { "cached_tokens": 0 }
+  }
+}
