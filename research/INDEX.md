@@ -36,3 +36,4 @@ base is part of the context‑rollover survival kit (see [CLAUDE.md](../CLAUDE.m
 | 28 | [28-claude-code-wrap.md](28-claude-code-wrap.md) | Deep-wrapping Claude Code: memory surfaces, hooks/OTEL/MCP, model swap, ToS-safe tri-mode architecture |
 | 29 | [29-capability-grounding.md](29-capability-grounding.md) | Capability-grounded routing: benchmark/pricing data sources + licensing, task→benchmark taxonomy, capability×price scorer, per-task cost estimation |
 | 30 | [30-team-sync.md](30-team-sync.md) | Team sync: personal/team brain split, git+append-only sync, one-unit Cloudflare deploy ($0–5/mo), Access auth, team usage/cost + audit schema |
+| 31 | [31-flat-file-knowledge.md](31-flat-file-knowledge.md) | Flat-file knowledge: Karpathy grep+markdown thesis, files-as-truth + SQLite-as-index prior art, sync semantics, source-vs-summary frontmatter, objection-killing one-liner |
