@@ -272,3 +272,45 @@ describe('usage & billing config ([usage] — the ledger budget keys)', () => {
     expect(() => loadConfig({ cwd: project, home, env: {} })).toThrow(/usage.monthlyBudgetUsd/);
   });
 });
+
+describe('memory config ([memory] — the brain in the run loop, issue #27)', () => {
+  it('defaults: memory on, project store implied, sane recall caps', () => {
+    const loaded = loadConfig({ cwd: project, home, env: {} });
+    expect(loaded.config.memory.enabled).toBe(true);
+    expect(loaded.config.memory.store).toBeUndefined();
+    expect(loaded.config.memory.recallLimit).toBe(6);
+    expect(loaded.config.memory.recallTokenBudget).toBe(1200);
+    expect(loaded.provenance['memory.enabled']).toBe('default');
+  });
+
+  it('a project can disable memory and tune the recall caps + store path', () => {
+    writeProject(
+      '[memory]\nenabled = false\nstore = "shared/brain.db"\nrecallLimit = 12\nrecallTokenBudget = 2048\n',
+    );
+    const loaded = loadConfig({ cwd: project, home, env: {} });
+    expect(loaded.config.memory.enabled).toBe(false);
+    expect(loaded.config.memory.store).toBe('shared/brain.db');
+    expect(loaded.config.memory.recallLimit).toBe(12);
+    expect(loaded.config.memory.recallTokenBudget).toBe(2048);
+    expect(loaded.provenance['memory.enabled']).toBe('project');
+  });
+
+  it('GLAM_MEMORY=false binds to memory.enabled (boolean env kind)', () => {
+    const loaded = loadConfig({ cwd: project, home, env: { GLAM_MEMORY: 'false' } });
+    expect(loaded.config.memory.enabled).toBe(false);
+    expect(loaded.provenance['memory.enabled']).toBe('env');
+    const on = loadConfig({ cwd: project, home, env: { GLAM_MEMORY: '1' } });
+    expect(on.config.memory.enabled).toBe(true);
+  });
+
+  it('rejects an unparseable GLAM_MEMORY value loudly (never a silent drop)', () => {
+    expect(() => loadConfig({ cwd: project, home, env: { GLAM_MEMORY: 'maybe' } })).toThrow(
+      /memory.enabled/,
+    );
+  });
+
+  it('fails loud on an out-of-range recallLimit, naming the field and file', () => {
+    writeProject('[memory]\nrecallLimit = 0\n');
+    expect(() => loadConfig({ cwd: project, home, env: {} })).toThrow(/memory.recallLimit/);
+  });
+});

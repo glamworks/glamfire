@@ -23,6 +23,7 @@ export {
   sandboxSchema,
   runSchema,
   usageSchema,
+  memorySchema,
   credentialRefSchema,
   capabilitySchema,
   type GlamConfig,
@@ -37,6 +38,7 @@ export {
   type SandboxConfig,
   type RunConfig,
   type UsageConfig,
+  type MemoryConfig,
   type BudgetConfig,
   type Verdict,
 } from './schema.js';

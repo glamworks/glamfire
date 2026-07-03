@@ -29,6 +29,7 @@
   "dependencies": {
     "@glamfire/engine": "workspace:*",
     "@glamfire/adapters": "workspace:*",
+    "@glamfire/brain": "workspace:*",
     "@glamfire/config": "workspace:*",
     "@glamfire/router": "workspace:*"
   }

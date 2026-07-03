@@ -30,4 +30,4 @@ export {
   defaultPolicy,
   gate,
 } from './permissions.js';
-export { type RunOptions, runTask } from './loop.js';
+export { type RunOptions, DEFAULT_SYSTEM, runTask } from './loop.js';

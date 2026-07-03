@@ -6,12 +6,13 @@
 // active adapter/model, SPEC §9) plus a final token/cost summary.
 
 import { readFileSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
+import { basename, relative, resolve } from 'node:path';
 import { createFireworksGlmAdapter, resolveFireworksConfig } from '@glamfire/adapters';
 import { ConfigError, loadConfig } from '@glamfire/config';
-import { builtinTools, defaultPolicy, runTask } from '@glamfire/engine';
+import { DEFAULT_SYSTEM, builtinTools, defaultPolicy, runTask } from '@glamfire/engine';
 import { PolicyError, explainDecision } from '@glamfire/router';
 import { appendRecord, budgetStatus, buildRunRecord, readLedger } from './ledger.mjs';
+import { brainStorePath, buildEpisode, composeSystem, openBrain, packRecall } from './memory.mjs';
 import { buildModelRegistry, buildRouter } from './router.mjs';
 import { CODES, color, useColor } from './ui.mjs';
 
@@ -31,6 +32,7 @@ Options:
   --max-tokens <n>       Hard token ceiling
   --max-steps <n>        Max plan->act->observe iterations (default: 8)
   --no-stream            Use a single non-streaming completion
+  --no-memory            Skip brain recall + episode capture for this run
   --show-thinking        Stream the model's reasoning tokens (dimmed)
   --explain              Print the routing decision (distribution, confidence, why)
   --yes                  Auto-approve "ask" tool permissions (else denied)
@@ -43,6 +45,12 @@ The model is chosen by the cost-aware router from your routing policy (center wo
 defaults to GLM 5.2 on Fireworks). Passing --model bypasses routing for that run.
 See \`glam route "<prompt>"\` for an offline routing preview.
 
+Memory is in the loop (SPEC §5.2): each run recalls relevant records from the
+project's local brain store (.glam/brain.db — offline hybrid retrieval, hard
+token cap, full provenance) and writes a structured episode back afterward so
+future runs remember. The run header shows what was recalled. Disable with
+--no-memory, \`[memory] enabled = false\` in glam.toml, or GLAM_MEMORY=false.
+
 Requires FIREWORKS_API_KEY. Run \`glam doctor\` to check your environment.
 `;
 
@@ -50,6 +58,7 @@ function parseArgs(args) {
   const opts = {
     files: [],
     stream: true,
+    memory: true,
     showThinking: false,
     explain: false,
     yes: false,
@@ -104,6 +113,9 @@ function parseArgs(args) {
         break;
       case '--no-stream':
         opts.stream = false;
+        break;
+      case '--no-memory':
+        opts.memory = false;
         break;
       case '--show-thinking':
         opts.showThinking = true;
@@ -163,9 +175,11 @@ export async function cmdRun(argv, { version }) {
   // win over env, which wins over the config files (SPEC §6 precedence).
   let config;
   let glamConfig;
+  let configSources;
   try {
     const loaded = loadConfig({ cwd: process.cwd(), env: process.env });
     glamConfig = loaded.config;
+    configSources = loaded.sources;
     const overrides = {};
     if (opts.model !== undefined) overrides.model = opts.model;
     if (opts.effort !== undefined) overrides.reasoningEffort = opts.effort;
@@ -208,6 +222,61 @@ export async function cmdRun(argv, { version }) {
 
   const task = { goal: opts.goal, budget };
   if (Object.keys(inputs).length > 0) task.inputs = inputs;
+
+  // --- memory in the loop: retrieval BEFORE the run (SPEC §5.2, issue #27) ----
+  // Query the project's brain with the task and pack the top hits (hard token
+  // cap, provenance + record ids) into the system context. Project-scoped store
+  // by default; an empty store recalls zero — honest, never an error. The brain
+  // stays open so the episode is written back after the run.
+  const memCfg = glamConfig.memory;
+  const mem = {
+    enabled: opts.memory && memCfg.enabled,
+    off: !opts.memory ? '--no-memory' : !memCfg.enabled ? 'config' : null,
+    brain: null,
+    store: null,
+    totalRecords: 0,
+    recalled: 0,
+    recallTokens: 0,
+    block: '',
+    episodeId: null,
+  };
+  if (mem.enabled) {
+    mem.store = brainStorePath({
+      memory: memCfg,
+      projectConfigPath: configSources.project,
+      cwd: process.cwd(),
+    });
+    try {
+      const opened = await openBrain(mem.store);
+      if (opened.available) {
+        mem.brain = opened.brain;
+        mem.totalRecords = opened.brain.count();
+        if (mem.totalRecords > 0) {
+          const result = await opened.brain.query(opts.goal, {
+            limit: memCfg.recallLimit,
+            tokenBudget: memCfg.recallTokenBudget,
+          });
+          const packed = packRecall(result.results, { tokenBudget: memCfg.recallTokenBudget });
+          mem.block = packed.block;
+          mem.recalled = packed.packed.length;
+          mem.recallTokens = packed.usedTokens;
+        }
+      } else {
+        mem.enabled = false;
+        mem.off = 'unavailable';
+        mem.unavailableReason = opened.reason;
+      }
+    } catch (err) {
+      // A broken store must not make runs impossible — but it is reported
+      // loudly, never swallowed, and nothing is recalled or written.
+      mem.enabled = false;
+      mem.off = 'error';
+      mem.unavailableReason = err.message;
+      process.stderr.write(`glam run: warning: memory unavailable: ${err.message}\n`);
+      mem.brain = null;
+    }
+  }
+  const system = composeSystem(DEFAULT_SYSTEM, mem.block);
 
   const adapter = createFireworksGlmAdapter(config);
   const runtimeConfig = {
@@ -270,8 +339,27 @@ export async function cmdRun(argv, { version }) {
   }
   out.write(
     `  effort: ${config.reasoningEffort}   tier: ${config.serviceTier}   ` +
-      `budget: ${fmtUSD(budget.maxUSD)} / ${budget.maxSteps} steps\n\n`,
+      `budget: ${fmtUSD(budget.maxUSD)} / ${budget.maxSteps} steps\n`,
   );
+  // Memory is visible on every run (SPEC §9 honesty): what was recalled, from
+  // where — or exactly why memory is off. Zero recalls from an empty store is a
+  // normal, honest state.
+  const storeDisplay = mem.store
+    ? relative(process.cwd(), mem.store).startsWith('..')
+      ? mem.store
+      : relative(process.cwd(), mem.store)
+    : null;
+  if (mem.enabled) {
+    const recallNote =
+      mem.totalRecords === 0
+        ? 'store empty — recalled 0'
+        : `recalled ${mem.recalled} of ${mem.totalRecords} records (~${mem.recallTokens} tokens)`;
+    out.write(`  memory: ${recallNote} · ${storeDisplay}\n\n`);
+  } else if (mem.off === 'unavailable' || mem.off === 'error') {
+    out.write(`  memory: unavailable — ${mem.unavailableReason}\n\n`);
+  } else {
+    out.write(`  memory: off (${mem.off})\n\n`);
+  }
 
   if (opts.explain && decision) {
     out.write(`${color(useColorOut, DIM, explainDecision(decision))}\n\n`);
@@ -333,6 +421,7 @@ export async function cmdRun(argv, { version }) {
       config: runtimeConfig,
       cwd: process.cwd(),
       policy,
+      system,
       stream: opts.stream,
       onStep,
       onToken,
@@ -344,6 +433,7 @@ export async function cmdRun(argv, { version }) {
   } catch (err) {
     process.stderr.write(`\nglam run: ${err.message}\n`);
     process.exitCode = 1;
+    mem.brain?.close();
     return;
   } finally {
     process.removeListener('SIGINT', onSigint);
@@ -373,6 +463,36 @@ export async function cmdRun(argv, { version }) {
       `steps: ${run.steps.length}   status: ${run.status}\n`,
   );
 
+  // --- memory in the loop: episode capture AFTER the run (SPEC §5.2) ---------
+  // Persist a structured episode — task, outcome, decisions, files touched,
+  // models, cost — so future runs recall this one. A write failure never
+  // corrupts the run result, but it is reported loudly — never swallowed.
+  if (mem.brain !== null) {
+    try {
+      const episode = buildEpisode({
+        goal: opts.goal,
+        run,
+        adapterId: adapter.id,
+        recalledCount: mem.recalled,
+        version,
+        durationMs: Date.now() - startedAt,
+      });
+      const record = await mem.brain.addEpisode(episode);
+      mem.episodeId = record.id;
+      out.write(
+        color(
+          useColorOut,
+          DIM,
+          `memory: recalled ${mem.recalled} · episode ${record.id.slice(0, 8)} saved → ${storeDisplay}\n`,
+        ),
+      );
+    } catch (err) {
+      process.stderr.write(`glam run: warning: could not save episode to memory: ${err.message}\n`);
+    } finally {
+      mem.brain.close();
+    }
+  }
+
   // --- usage ledger (monitoring, usage & billing) ---
   // Every real run is appended to the local, owned ledger (~/.glam/usage.jsonl)
   // so `glam usage` can show real spend. A ledger-write failure never corrupts
@@ -380,7 +500,7 @@ export async function cmdRun(argv, { version }) {
   try {
     const record = buildRunRecord({ run, durationMs: Date.now() - startedAt, version });
     const ledgerFile = appendRecord(record);
-    out.write(color(useColor, DIM, `recorded to ${ledgerFile} — see \`glam usage\`\n`));
+    out.write(color(useColorOut, DIM, `recorded to ${ledgerFile} — see \`glam usage\`\n`));
     // Monthly budget alerting (config [usage]): warn when this run pushed
     // month-to-date spend over warnAtPct% (or past 100%) of monthlyBudgetUsd.
     const { records } = readLedger({});
@@ -391,15 +511,23 @@ export async function cmdRun(argv, { version }) {
         budgetState.level === 'over'
           ? `monthly budget EXCEEDED: ${fmtUSD(budgetState.spentUsd)} of ${fmtUSD(budgetState.budgetUsd)} (${pct}%)`
           : `monthly budget warning: ${fmtUSD(budgetState.spentUsd)} of ${fmtUSD(budgetState.budgetUsd)} (${pct}%, warn at ${budgetState.warnAtPct}%)`;
-      process.stderr.write(`${color(useColor, BOLD, `glam run: ${line}`)}\n`);
+      process.stderr.write(`${color(useColorOut, BOLD, `glam run: ${line}`)}\n`);
     }
   } catch (err) {
     process.stderr.write(`glam run: warning: could not record usage: ${err.message}\n`);
   }
 
   if (opts.json) {
+    const memoryReport = {
+      enabled: mem.enabled,
+      ...(mem.off ? { off: mem.off } : {}),
+      store: mem.store,
+      recalled: mem.recalled,
+      totalRecords: mem.totalRecords,
+      episodeId: mem.episodeId,
+    };
     out.write(
-      `${JSON.stringify({ status: run.status, usage: run.usage, costUSD: run.costUSD, steps: run.steps }, null, 2)}\n`,
+      `${JSON.stringify({ status: run.status, usage: run.usage, costUSD: run.costUSD, memory: memoryReport, steps: run.steps }, null, 2)}\n`,
     );
   }
 

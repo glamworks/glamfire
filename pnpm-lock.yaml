@@ -58,6 +58,9 @@ importers:
       '@glamfire/adapters':
         specifier: workspace:*
         version: link:../adapters
+      '@glamfire/brain':
+        specifier: workspace:*
+        version: link:../brain
       '@glamfire/config':
         specifier: workspace:*
         version: link:../config
