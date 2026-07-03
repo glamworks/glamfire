@@ -151,6 +151,38 @@ check('glam route --json emits valid structured output offline', () => {
   if (typeof parsed.report?.savedUsd !== 'number') throw new Error('report.savedUsd missing');
 });
 
+check('glam route picks DeepSeek-V4-Flash as cheapest capable when a rule lists it', () => {
+  // Real end-to-end routing over the DeepSeek tiering (research/25), offline,
+  // no key: a project glam.toml prefers the budget tier for center work; the
+  // router must pick deepseek-v4-flash ($0.14/$0.28 — cheapest survivor) from
+  // real registered capabilities + pricing, not GLM.
+  const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-deepseek-'));
+  try {
+    writeFileSync(
+      join(dir, 'glam.toml'),
+      '[[routing.rules]]\n' +
+        'distribution = "center"\n' +
+        'requires = ["tool_calling", "long_context"]\n' +
+        'candidates = [\n' +
+        '  "accounts/fireworks/models/deepseek-v4-flash",\n' +
+        '  "accounts/fireworks/models/glm-5p2",\n' +
+        '  "accounts/fireworks/models/deepseek-v4-pro",\n' +
+        ']\n',
+    );
+    const env = { PATH: process.env.PATH, HOME: dir, USERPROFILE: dir };
+    const out = execFileSync('node', [cli, 'route', 'Summarize this paragraph in one sentence.'], {
+      encoding: 'utf8',
+      cwd: dir,
+      env,
+    });
+    if (!/chosen model:\s+accounts\/fireworks\/models\/deepseek-v4-flash/.test(out)) {
+      throw new Error(`cheapest capable candidate should be DeepSeek-V4-Flash, got:\n${out}`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 check('glam run without FIREWORKS_API_KEY fails with actionable guidance', () => {
   // Real surface, real config resolution: with no key the run command must fail
   // loudly and tell the user exactly what to do — never silently fake a call.

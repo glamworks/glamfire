@@ -28,6 +28,19 @@ them the hard way.
   verify against the actual repo LICENSE before asserting (research/01).
 - **Confidence signal**: probe/perplexity-based confidence beats verbalized
   ("how sure are you?") confidence for routing/escalation (research/04).
+- **Fireworks `GET /inference/v1/models` is a curated subset, not the catalog.**
+  It returned only 7 models on 2026-07-03 and OMITS `deepseek-v4-flash`, which is
+  READY + serverless + serving fine. To verify a model exists, hit the control
+  plane: `GET https://api.fireworks.ai/v1/accounts/fireworks/models/<short-id>`
+  (same bearer key) — returns `state`, `supportsServerless`, `supportsTools`,
+  `contextLength`. Never conclude a model is gone from the inference list alone.
+- **DeepSeek-V4 on Fireworks (verified live 2026-07-03):** both `deepseek-v4-pro`
+  and `deepseek-v4-flash` are THINKING models — they emit `reasoning_content` and
+  accept `reasoning_effort` (same knob as GLM). Parallel tool calls + `seed` work.
+  Fireworks lists **no Priority tier for V4-Flash** (standard only) — the adapter
+  fails loud on `--tier priority|fast` with Flash. Their streamed tool-call
+  arguments arrived as ONE chunk (not fragmented like GLM) — the shared
+  accumulator handles both; don't assume fragmentation when authoring fixtures.
 - **Windows CI cross-platform traps (fixed 2026-07-01, all green on win/mac/linux):**
   (1) No `.gitattributes` → Windows checks out CRLF → `biome check` fails (LF formatter).
   Fix: `.gitattributes` with `* text=auto eol=lf`. (2) Dynamic `import()` of a runtime
