@@ -89,7 +89,8 @@ The difference is everything wrapped around that loop:
    with monthly budget warnings.
 3. **Your context is a file on your disk.** The brain is SQLite you own — exportable to
    human‑readable JSONL and back, bit‑exact, tested. The memory that makes an agent good
-   at *your* work stays yours when the model underneath changes.
+   at *your* work stays yours when the model underneath changes. (The **context** is
+   local. The **intelligence** is deliberately not — see the next section.)
 4. **Models are swappable parts.** Each model family gets a conformance‑tested adapter —
    the per‑model tuning that normally makes migration a rewrite is done once, in the open,
    gated by tests. Adding DeepSeek V4 to your routing was one TOML line, not a migration.
@@ -113,16 +114,24 @@ buyer's side of that market — the work system that exploits interchangeable su
 instead of marrying one. That's glamfire: routing, metering, owned context, and tested
 switching, as one open Apache‑2.0 harness.
 
+glamfire is **opinionated about the split**: your *context* lives on your disk; your
+*inference* is rented on demand from trusted clouds — the fire in the name is
+**Fireworks‑class serverless GPUs**, not your laptop. Most teams don't own AI inference
+hardware and shouldn't need to: a frontier‑class open model is a 400B–1.6T‑parameter
+MoE, and renting it FP8 by the token costs cents. Self‑hosting via vLLM is a supported
+escape hatch for the teams that genuinely need it — not the default, and never a
+prerequisite. **Local‑first describes your data, not your GPUs.**
+
 ### Where it fits (tools you may already use)
 
 | You use | It is | glamfire, next to it |
 |---|---|---|
-| **Claude Code** | the best frontier coding agent | Keep it for the hard edge. glamfire routes the routine center of your workload to open models at a fifth to a thirtieth of the price, with frontier as an **earned escalation** — plus hard budget stops and a local spend ledger, which no single‑vendor agent gives you. |
-| **opencode & other OSS agents** | pick‑a‑model agent CLIs | There *you* pick one model per session. glamfire picks **per task** — by price, capability, and confidence — and switching families is conformance‑tested, not vibes. |
-| **Ollama / vLLM** | run open weights yourself | A model server is not a work system. glamfire is the loop + routing + ledger on top: point an adapter at your vLLM endpoint, or rent the same weights FP8 serverless when your laptop can't hold a 753B MoE. |
-| **OpenRouter** | one API key for many models | A gateway routes **requests you already wrote** to a model you already chose. glamfire routes **tasks**, and owns the agent loop, context store, budgets, and verification around them. |
+| **Claude Code** | the best frontier coding agent | Keep it for the hard edge. glamfire routes the routine center of your workload to open models at a fifth to a thirtieth of the price, with frontier as an **earned escalation** — plus a **hard per‑run budget stop no frontier‑lab agent ships**, and a spend ledger that lives in a file you own. |
+| **opencode & other OSS agents** | configurable agent CLIs | There you (or your agent config) assign models to agents and switch by hand. glamfire decides **per task, automatically** — price × capability × calibrated confidence, with escalation the cheap model must fail to trigger — and family switching is conformance‑tested, not vibes. |
+| **Ollama / vLLM** | run open weights yourself | A model server is not a work system. glamfire is the loop + routing + ledger on top — today via serverless FP8 rentals of the same weights your laptop can't hold (a local/vLLM‑endpoint adapter is specified and in build). |
+| **OpenRouter** | one key, 400+ models, auto‑router | A hosted middleman: even its auto‑router picks a model **per prompt**, and every request — plus your spend metadata — transits their gateway. glamfire goes **direct to providers you choose**, routes whole tasks, and keeps the loop, context store, budgets, and ledger on your disk. |
 | **A single open model (Hermes, GLM, DeepSeek…)** | a frontier‑class brain, free | A brain in a jar. glamfire is the jar‑opener: the harness that turns raw weights into a working, budgeted, tool‑using agent — and lets you swap the brain later. |
-| **Goose** | model‑agnostic OSS agent | Closest cousin, honestly. glamfire's wedge: **automatic cost/capability routing**, an owned portable context layer guaranteed by test, and per‑model conformance gates. |
+| **Goose** | model‑agnostic OSS agent (AAIF‑stewarded) | Closest cousin, honestly — it ships config‑driven multi‑model (lead/worker, planner/executor). glamfire's wedge: routing **each task** automatically by price × capability × confidence with earned escalation, an owned portable context layer **guaranteed by test**, and per‑model conformance gates. |
 
 ### Five things to do with it this week
 
@@ -137,8 +146,9 @@ switching, as one open Apache‑2.0 harness.
    spend down by day/model/provider; set `[usage] monthlyBudgetUsd` and get warned at 80%.
 4. **Read the market in one command.** `glam models --sort price` — the current open‑weight
    landscape with real prices and dates; `--refresh` diffs live provider prices and flags drops.
-5. **Fire‑drill your continuity.** Add a routing rule that prefers DeepSeek V4 or Kimi, and
-   prove to yourself the same task completes when your primary provider is down. 2026 already
+5. **Fire‑drill your continuity.** Add a routing rule that prefers DeepSeek V4 (wired and
+   live‑verified today; Kimi is in the catalog with its adapter pending), and prove to
+   yourself the same task completes when your primary provider is down. 2026 already
    showed frontier access can vanish for weeks — the teams that shrugged owned their routing.
 
 ---
@@ -296,7 +306,7 @@ every release.)
   under `~/.glam/cache/models.json` (used automatically when newer). **Single source
   of truth:** the adapters' pricing rows derive from this same catalog, so the
   router's cost decisions and the landscape view can never drift apart.
-  end‑to‑end**: the `glam` CLI bundles to a self‑contained **`glamfire` npm package**
+- **Packaging & install — built and verified end‑to‑end**: the `glam` CLI bundles to a self‑contained **`glamfire` npm package**
   (one file, no `workspace:*` deps, no native modules — `npm i -g` then run the
   installed binary, proven by packing the tarball, global‑installing it, and running
   `glam --version` + `glam route`), and to **single‑file binaries** for darwin‑arm64,
