@@ -422,6 +422,7 @@ export class AnthropicAdapter implements StreamingAdapter {
       method: 'POST',
       headers: req.headers,
       body: JSON.stringify(req.body),
+      ...(state.signal ? { signal: state.signal } : {}),
     });
     if (!res.ok) {
       throw new Error(await providerError(res, this.config.model));
@@ -436,6 +437,7 @@ export class AnthropicAdapter implements StreamingAdapter {
       method: 'POST',
       headers: req.headers,
       body: JSON.stringify(req.body),
+      ...(state.signal ? { signal: state.signal } : {}),
     });
     if (!res.ok || !res.body) {
       throw new Error(await providerError(res, this.config.model));

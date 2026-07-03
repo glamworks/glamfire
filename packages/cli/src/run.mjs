@@ -12,15 +12,9 @@ import { ConfigError, loadConfig } from '@glamfire/config';
 import { builtinTools, defaultPolicy, runTask } from '@glamfire/engine';
 import { PolicyError, explainDecision } from '@glamfire/router';
 import { buildModelRegistry, buildRouter } from './router.mjs';
+import { CODES, color, useColor } from './ui.mjs';
 
-const DIM = '\x1b[2m';
-const BOLD = '\x1b[1m';
-const RESET = '\x1b[0m';
-const FLAME = '\x1b[38;5;208m';
-
-function color(on, code, s) {
-  return on ? `${code}${s}${RESET}` : s;
-}
+const { DIM, BOLD, FLAME, YELLOW } = CODES;
 
 const RUN_HELP = `glam run — run a task against GLM 5.2 on Fireworks.
 
@@ -70,6 +64,14 @@ function parseArgs(args) {
       i += 1;
       return v;
     };
+    // A numeric option value must actually be a number — a silent NaN here
+    // would disable the budget ceiling, which is never acceptable.
+    const nextNumber = () => {
+      const raw = next();
+      const n = Number(raw);
+      if (!Number.isFinite(n)) throw new Error(`option ${a} expects a number, got "${raw}"`);
+      return n;
+    };
     switch (a) {
       case '-h':
       case '--help':
@@ -88,16 +90,16 @@ function parseArgs(args) {
         opts.tier = next();
         break;
       case '--temperature':
-        opts.temperature = Number(next());
+        opts.temperature = nextNumber();
         break;
       case '--max-usd':
-        opts.maxUSD = Number(next());
+        opts.maxUSD = nextNumber();
         break;
       case '--max-tokens':
-        opts.maxTokens = Number(next());
+        opts.maxTokens = nextNumber();
         break;
       case '--max-steps':
-        opts.maxSteps = Number(next());
+        opts.maxSteps = nextNumber();
         break;
       case '--no-stream':
         opts.stream = false;
@@ -119,7 +121,9 @@ function parseArgs(args) {
         opts.json = true;
         break;
       default:
-        if (a.startsWith('--')) throw new Error(`unknown option "${a}"`);
+        // Reject ANY unknown flag (single- or double-dash) instead of silently
+        // folding it into the prompt text.
+        if (a.startsWith('-') && a !== '-') throw new Error(`unknown option "${a}"`);
         positional.push(a);
     }
   }
@@ -151,7 +155,7 @@ export async function cmdRun(argv, { version }) {
     return;
   }
 
-  const useColor = process.stdout.isTTY === true;
+  const useColorOut = useColor(process.stdout);
 
   // Load the layered config (defaults < ~/.glam/config.toml < ./glam.toml < env),
   // then resolve the Fireworks provider slice through it. CLI flags (overrides)
@@ -246,20 +250,22 @@ export async function cmdRun(argv, { version }) {
   }
 
   // --- run header (SPEC §9) ---
-  out.write(`${color(useColor, FLAME, `glamfire ${version}`)} ${color(useColor, DIM, '· run')}\n`);
+  out.write(
+    `${color(useColorOut, FLAME, `glamfire ${version}`)} ${color(useColorOut, DIM, '· run')}\n`,
+  );
   const chosenModel = decision ? decision.selection.chosen.id : config.model;
   out.write(`  adapter: ${adapter.id}   model: ${chosenModel}\n`);
   if (decision) {
     const c = decision.classification;
     out.write(
       color(
-        useColor,
+        useColorOut,
         DIM,
         `  routing: ${c.distribution} (score ${c.score.toFixed(2)}, confidence ${c.confidence.toFixed(2)}) → ${chosenModel}\n`,
       ),
     );
   } else {
-    out.write(color(useColor, DIM, '  routing: explicit --model override (router bypassed)\n'));
+    out.write(color(useColorOut, DIM, '  routing: explicit --model override (router bypassed)\n'));
   }
   out.write(
     `  effort: ${config.reasoningEffort}   tier: ${config.serviceTier}   ` +
@@ -267,7 +273,7 @@ export async function cmdRun(argv, { version }) {
   );
 
   if (opts.explain && decision) {
-    out.write(`${color(useColor, DIM, explainDecision(decision))}\n\n`);
+    out.write(`${color(useColorOut, DIM, explainDecision(decision))}\n\n`);
   }
 
   let streamedTextThisTurn = false;
@@ -276,7 +282,7 @@ export async function cmdRun(argv, { version }) {
       out.write(ev.delta);
       streamedTextThisTurn = true;
     } else if (ev.kind === 'reasoning' && opts.showThinking) {
-      process.stderr.write(color(useColor, DIM, ev.delta));
+      process.stderr.write(color(useColorOut, DIM, ev.delta));
     }
   };
 
@@ -288,7 +294,7 @@ export async function cmdRun(argv, { version }) {
       streamedTextThisTurn = false;
     } else if (step.type === 'tool_call') {
       const args = JSON.stringify(step.arguments);
-      out.write(color(useColor, DIM, `  → ${step.name}(${args})  [${step.permission}]\n`));
+      out.write(color(useColorOut, DIM, `  → ${step.name}(${args})  [${step.permission}]\n`));
     } else if (step.type === 'tool_result') {
       const status = step.ok ? 'ok' : 'error';
       let detail = '';
@@ -297,9 +303,24 @@ export async function cmdRun(argv, { version }) {
       } else if (!step.ok) {
         detail = ` — ${String(step.result).slice(0, 120)}`;
       }
-      out.write(color(useColor, DIM, `  ← ${step.name} ${status}${detail}\n`));
+      out.write(color(useColorOut, DIM, `  ← ${step.name} ${status}${detail}\n`));
     }
   };
+
+  // --- clean Ctrl-C (SIGINT) handling -----------------------------------------
+  // First Ctrl-C: abort cooperatively — the in-flight provider request is really
+  // cancelled (AbortSignal reaches the adapter's fetch), the engine finishes with
+  // status `interrupted`, and the summary below reports the honest cost of every
+  // COMPLETED turn. Second Ctrl-C: force-quit with the conventional 130.
+  const controller = new AbortController();
+  const onSigint = () => {
+    if (controller.signal.aborted) process.exit(130);
+    process.stderr.write(
+      `\n${color(useColorOut, YELLOW, 'interrupted')} — stopping (Ctrl-C again to force quit)\n`,
+    );
+    controller.abort();
+  };
+  process.on('SIGINT', onSigint);
 
   let run;
   try {
@@ -313,6 +334,7 @@ export async function cmdRun(argv, { version }) {
       stream: opts.stream,
       onStep,
       onToken,
+      signal: controller.signal,
       // The router (when not bypassed by --model) selects the model and drives
       // verification/escalation; the engine still owns the loop + budget.
       ...(router ? { router } : {}),
@@ -321,16 +343,27 @@ export async function cmdRun(argv, { version }) {
     process.stderr.write(`\nglam run: ${err.message}\n`);
     process.exitCode = 1;
     return;
+  } finally {
+    process.removeListener('SIGINT', onSigint);
   }
 
   // --- final summary ---
   const u = run.usage;
   const total = u.inputTokens + u.outputTokens;
-  out.write(`\n${color(useColor, DIM, '──')}\n`);
+  out.write(`\n${color(useColorOut, DIM, '──')}\n`);
   if (run.status === 'budget_exhausted') {
-    out.write(color(useColor, BOLD, 'stopped: budget/step ceiling reached\n'));
+    out.write(color(useColorOut, BOLD, 'stopped: budget/step ceiling reached\n'));
+  } else if (run.status === 'interrupted') {
+    out.write(color(useColorOut, BOLD, 'stopped: interrupted by Ctrl-C\n'));
+    out.write(
+      color(
+        useColorOut,
+        DIM,
+        'cost below covers completed turns; a turn cancelled mid-flight may still bill the provider a few tokens.\n',
+      ),
+    );
   } else if (run.status === 'error') {
-    out.write(color(useColor, BOLD, 'stopped: engine error\n'));
+    out.write(color(useColorOut, BOLD, 'stopped: engine error\n'));
   }
   out.write(
     `tokens: in ${u.inputTokens} (cached ${u.cachedInputTokens}) · out ${u.outputTokens} ` +
@@ -344,5 +377,6 @@ export async function cmdRun(argv, { version }) {
     );
   }
 
-  process.exitCode = run.status === 'error' ? 1 : 0;
+  // Exit codes: 0 done/budget ceiling, 1 engine error, 130 user interrupt (128+SIGINT).
+  process.exitCode = run.status === 'error' ? 1 : run.status === 'interrupted' ? 130 : 0;
 }

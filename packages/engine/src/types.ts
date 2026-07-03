@@ -148,7 +148,7 @@ export interface VerificationStep extends BaseStep {
   detail: string;
 }
 
-export type FinalReason = 'stop' | 'budget_exhausted' | 'max_steps' | 'error';
+export type FinalReason = 'stop' | 'budget_exhausted' | 'max_steps' | 'interrupted' | 'error';
 
 export interface FinalStep extends BaseStep {
   type: 'final';
@@ -166,7 +166,7 @@ export type Step =
   | VerificationStep
   | FinalStep;
 
-export type RunStatus = 'running' | 'done' | 'budget_exhausted' | 'error';
+export type RunStatus = 'running' | 'done' | 'budget_exhausted' | 'interrupted' | 'error';
 
 /** A completed (or in-progress) run: replayable from its ordered step log. */
 export interface Run {
@@ -229,6 +229,12 @@ export interface RunState {
   /** Tools available this turn (re-emitted into the model's native grammar). */
   tools: ToolSpec[];
   config: AdapterRuntimeConfig;
+  /**
+   * Cooperative cancellation (e.g. Ctrl-C on the CLI). Adapters pass this to
+   * their HTTP layer so an in-flight provider request is really aborted, not
+   * just ignored.
+   */
+  signal?: AbortSignal;
 }
 
 /** A ready-to-send provider HTTP request (transport-neutral shape). */

@@ -64,6 +64,69 @@ check('unknown command exits non-zero', () => {
   }
 });
 
+check('a command typo gets a "did you mean" suggestion', () => {
+  try {
+    run('rout');
+    throw new Error('expected non-zero exit');
+  } catch (err) {
+    if (err.status !== 2) throw new Error(`expected exit 2, got ${err.status}`);
+    if (!String(err.stderr).includes('Did you mean `glam route`?')) {
+      throw new Error('missing "did you mean" suggestion for `rout`');
+    }
+  }
+});
+
+check('help orients a first-run user (get started + doctor + key)', () => {
+  const out = run('help');
+  if (!out.includes('Get started')) throw new Error('help missing Get started section');
+  if (!out.includes('glam doctor')) throw new Error('help missing doctor pointer');
+  if (!out.includes('FIREWORKS_API_KEY')) throw new Error('help missing key pointer');
+});
+
+check('doctor gives a copy-paste fix for a missing key and a green install check', () => {
+  const { FIREWORKS_API_KEY: _omit, ...env } = process.env;
+  let out = '';
+  try {
+    out = execFileSync('node', [cli, 'doctor'], { encoding: 'utf8', env });
+  } catch (err) {
+    if (err.status !== 1) throw new Error(`expected exit 1 without a key, got ${err.status}`);
+    out = String(err.stdout ?? '');
+  }
+  if (!out.includes('fix: export FIREWORKS_API_KEY='))
+    throw new Error('doctor missing copy-paste key fix');
+  // Regression: the install check must pass from a repo checkout (and, fixed
+  // for v0.3.x, from inside the compiled binary — see packages/cli/test).
+  if (!/✓ glamfire install/.test(out)) throw new Error('doctor install check not green');
+});
+
+check('a non-numeric budget flag is rejected (exit 2), never a silent NaN ceiling', () => {
+  try {
+    run('run', 'hi', '--max-usd', 'abc');
+    throw new Error('expected non-zero exit');
+  } catch (err) {
+    if (err.status !== 2) throw new Error(`expected exit 2, got ${err.status}`);
+    if (!String(err.stderr).includes('expects a number'))
+      throw new Error('missing numeric-flag error message');
+  }
+});
+
+check('glam config | head does not EPIPE-crash (early pipe close)', () => {
+  // Portable `| head -1`: a wrapper node process spawns the real CLI, reads one
+  // chunk, then destroys the pipe — exactly what head does. Works on Windows too.
+  const script = `
+    const { spawn } = require('node:child_process');
+    const p = spawn(process.execPath, [process.argv[1], 'config'], { stdio: ['ignore','pipe','pipe'] });
+    let err = '';
+    p.stdout.once('data', () => p.stdout.destroy());
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('close', () => {
+      if (/EPIPE|node:internal/.test(err)) { process.stderr.write(err); process.exit(1); }
+      process.exit(0);
+    });
+  `;
+  execFileSync('node', ['-e', script, cli], { encoding: 'utf8' });
+});
+
 check('glam run --help shows the run usage', () => {
   const out = run('run', '--help');
   if (!out.includes('glam run')) throw new Error('missing run usage header');
