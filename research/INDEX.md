@@ -34,3 +34,4 @@ base is part of the context‑rollover survival kit (see [CLAUDE.md](../CLAUDE.m
 | 26 | [26-ornith.md](26-ornith.md) | Ornith-1.0 (DeepReinforce): self-scaffolding coding models; licensing, hosting, harness-swing evidence |
 | 27 | [27-dwarfstar.md](27-dwarfstar.md) | DwarfStar/DS4 (antirez): local engine for DeepSeek V4 Flash; $0-token local venue for the budget tier; adapter needs |
 | 29 | [29-capability-grounding.md](29-capability-grounding.md) | Capability-grounded routing: benchmark/pricing data sources + licensing, task→benchmark taxonomy, capability×price scorer, per-task cost estimation |
+| 30 | [30-team-sync.md](30-team-sync.md) | Team sync: personal/team brain split, git+append-only sync, one-unit Cloudflare deploy ($0–5/mo), Access auth, team usage/cost + audit schema |
