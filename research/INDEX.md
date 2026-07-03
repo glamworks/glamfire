@@ -28,3 +28,5 @@ base is part of the context‑rollover survival kit (see [CLAUDE.md](../CLAUDE.m
 | 20 | [20-self-hosting-deploy.md](20-self-hosting-deploy.md) | Local→Docker→server; Fireworks vs self-hosted GLM (vLLM/SGLang) |
 | 21 | [21-security-privacy.md](21-security-privacy.md) | Agent threat model, permissions+sandbox, supply chain |
 | 22 | [22-dogfooding.md](22-dogfooding.md) | Self-hosting dev; Claude Code → glamfire transition; verify gates |
+| 23 | [23-second-model-and-provider.md](23-second-model-and-provider.md) | Second open-weight model (Qwen; DeepSeek fallback) + second US provider |
+| 24 | [24-creator-thesis-update.md](24-creator-thesis-update.md) | Creator thesis refresh (Jun–Jul 2026): context wars, routing, receipts |
