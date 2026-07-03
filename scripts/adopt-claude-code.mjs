@@ -65,9 +65,7 @@ if (files.length === 0) {
 
 // scripts/ is not a workspace package, so resolve the brain through the repo
 // tree directly (same build the CLI uses from a workspace install).
-const { Brain } = await import(
-  new URL('../packages/brain/dist/index.js', import.meta.url).href
-);
+const { Brain } = await import(new URL('../packages/brain/dist/index.js', import.meta.url).href);
 const storePath = join(root, '.glam', 'brain.db');
 mkdirSync(dirname(storePath), { recursive: true });
 const brain = Brain.open(storePath);
@@ -80,8 +78,7 @@ try {
     const content = readFileSync(f.path, 'utf8').trim();
     if (content === '') continue;
     const existing = brain.get(f.id);
-    const action =
-      existing === null ? 'import' : existing.content === content ? 'skip' : 'update';
+    const action = existing === null ? 'import' : existing.content === content ? 'skip' : 'update';
     console.log(`  ${action.padEnd(6)} ${f.id}  (${content.length} chars, ${f.source})`);
     if (dryRun) continue;
     if (action === 'import') {

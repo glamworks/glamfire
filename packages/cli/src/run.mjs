@@ -253,8 +253,7 @@ export async function cmdRun(argv, { version }) {
     // alongside it is a contradiction we refuse loudly, never silently ignore.
     if (opts.local && opts.model !== undefined && !localDirect) {
       process.stderr.write(
-        `glam run: --local conflicts with --model "${opts.model}": that model is not listed ` +
-          'under providers.local.models. Drop --local, or use a local model id.\n',
+        `glam run: --local conflicts with --model "${opts.model}": that model is not listed under providers.local.models. Drop --local, or use a local model id.\n`,
       );
       process.exitCode = 2;
       return;

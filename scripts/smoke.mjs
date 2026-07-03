@@ -1126,6 +1126,46 @@ await checkAsync(
   },
 );
 
+// --- glam launch: one-command GLM-backed Claude Code (honest status line) -----
+check('glam help lists the launch command', () => {
+  const out = run('help');
+  if (!out.includes('launch')) throw new Error('help missing launch command');
+});
+
+check('glam launch --help documents the env vars and auto-serve', () => {
+  const out = run('launch', '--help');
+  if (!out.includes('ANTHROPIC_BASE_URL')) throw new Error('missing ANTHROPIC_BASE_URL');
+  if (!out.includes('ANTHROPIC_CUSTOM_MODEL_OPTION_NAME'))
+    throw new Error('missing custom model option name var');
+  if (!out.includes('GLM 5.2 (via glamfire)')) throw new Error('missing friendly display name');
+  if (!out.includes('auto-starts')) throw new Error('missing auto-serve behavior');
+  if (!out.includes('claude')) throw new Error('missing claude integration');
+});
+
+check('glam launch bogus → exit 2 + did-you-mean + supported list', () => {
+  try {
+    run('launch', 'bogus');
+    throw new Error('expected non-zero exit');
+  } catch (err) {
+    if (err.status !== 2) throw new Error(`expected exit 2, got ${err.status}`);
+    const e = String(err.stderr);
+    if (!e.includes('not yet supported')) throw new Error('missing not-yet-supported notice');
+    if (!e.includes('Supported integrations: claude')) throw new Error('missing supported list');
+  }
+});
+
+check('glam launch claud → exit 2 + did-you-mean', () => {
+  try {
+    run('launch', 'claud');
+    throw new Error('expected non-zero exit');
+  } catch (err) {
+    if (err.status !== 2) throw new Error(`expected exit 2, got ${err.status}`);
+    if (!String(err.stderr).includes('Did you mean `glam launch claude`')) {
+      throw new Error('missing did-you-mean for `claud`');
+    }
+  }
+});
+
 if (process.env.FIREWORKS_API_KEY) {
   await checkAsync(
     'glam serve LIVE: a real request through the proxy to GLM on Fireworks is metered',
@@ -1184,6 +1224,106 @@ if (process.env.FIREWORKS_API_KEY) {
   process.stdout.write(
     '  ! glam serve LIVE check SKIPPED: FIREWORKS_API_KEY not set in this environment.\n' +
       '    The live proxy->GLM path is exercised wherever the key exists (CI runs it).\n',
+  );
+}
+
+// LIVE launch: real claude + real GLM + real ledger, gated on FIREWORKS_API_KEY
+// AND `claude` on PATH. This is the human-standard verify for glam launch: the
+// one-command path actually reaches GLM 5.2 and the ledger records the honest id.
+function claudeOnPath() {
+  try {
+    const r = execFileSync(process.platform === 'win32' ? 'where' : 'which', ['claude'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return r.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+if (process.env.FIREWORKS_API_KEY && claudeOnPath()) {
+  await checkAsync(
+    'glam launch claude LIVE: real claude on GLM 5.2, honest id in the ledger',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-launch-live-'));
+      const home = join(dir, 'home');
+      mkdirSync(join(home, '.glam'), { recursive: true });
+      // Spawn `glam launch claude --port 0 -- -p "..."`. --port 0 makes launch
+      // auto-start serve on an ephemeral port (no collision with a real 4114).
+      // -p (print) mode is non-interactive: claude answers and exits.
+      const result = await new Promise((resolve) => {
+        const child = spawn(
+          'node',
+          [cli, 'launch', 'claude', '--port', '0', '--', '-p', 'reply with the single word PONG'],
+          {
+            cwd: dir,
+            env: {
+              ...baseEnv(home, { FIREWORKS_API_KEY: process.env.FIREWORKS_API_KEY }),
+              // Make sure no stale serve interferes; launch will start its own.
+              GLAM_SERVE_TOKEN: '',
+            },
+            stdio: ['ignore', 'pipe', 'pipe'],
+          },
+        );
+        let out = '';
+        child.stdout.on('data', (c) => {
+          out += String(c);
+        });
+        child.stderr.on('data', (c) => {
+          out += String(c);
+        });
+        const timer = setTimeout(() => {
+          try {
+            child.kill('SIGTERM');
+          } catch {}
+        }, 120000);
+        child.on('exit', (code) => {
+          clearTimeout(timer);
+          resolve({ code, out });
+        });
+      });
+      try {
+        if (result.code !== 0) {
+          throw new Error(`launch exited ${result.code}:\n${result.out.slice(-2000)}`);
+        }
+        if (!result.out.includes('PONG')) {
+          throw new Error(`no PONG in claude output:\n${result.out.slice(-2000)}`);
+        }
+        // The banner proves the honest-status-line path was taken.
+        if (!result.out.includes('GLM 5.2 (via glamfire)')) {
+          throw new Error('launch banner missing friendly model name');
+        }
+        // Ledger: a new record with the honest id + the real served model.
+        const ledgerPath = join(home, '.glam', 'usage.jsonl');
+        if (!existsSync(ledgerPath)) {
+          throw new Error('no usage.jsonl written — launch did not meter through serve');
+        }
+        const rec = readFileSync(ledgerPath, 'utf8').trim().split('\n').map(JSON.parse).at(-1);
+        if (rec.source !== 'proxy')
+          throw new Error(`ledger record source=${rec.source}, expected proxy`);
+        if (rec.model !== 'accounts/fireworks/models/glm-5p2') {
+          throw new Error(`ledger model=${rec.model}, expected glm-5p2 (real served model)`);
+        }
+        if (rec.requestedModel !== 'glm-5.2') {
+          throw new Error(
+            `ledger requestedModel=${rec.requestedModel}, expected glm-5.2 (honest id)`,
+          );
+        }
+        if (!(rec.costUsd > 0) || !(rec.usage.outputTokens > 0)) {
+          throw new Error('ledger record missing real usage/cost');
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+} else {
+  const why = !process.env.FIREWORKS_API_KEY
+    ? 'FIREWORKS_API_KEY not set'
+    : '`claude` not found on PATH';
+  process.stdout.write(
+    `  ! glam launch claude LIVE check SKIPPED: ${why}.\n    The live one-command path is exercised wherever both are present.\n`,
   );
 }
 

@@ -412,6 +412,15 @@ every release.)
   completed real multi‑turn tasks with real `Read`/`Write` tool calls through the
   proxy on GLM‑5.2, and `glam usage` showed the exact metered spend by client —
   $0.042 actual vs the $0.30 Claude Code estimated at Claude pricing.
+- **`glam launch claude` — one command, honest status line**: auto‑starts
+  `glam serve` on 127.0.0.1:4114 if it is not already running, sets the env block
+  that makes Claude Code's status line read **"GLM 5.2 (via glamfire)"** instead of
+  an Anthropic id (`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` + a non‑Anthropic
+  `ANTHROPIC_MODEL` + the documented `_CUSTOM_MODEL_OPTION_NAME`/`_OPTION_DESCRIPTION` vars),
+  execs `claude` with stdio inherited, and tears the gateway down on exit. Reuses a
+  running serve via `GLAM_SERVE_TOKEN`. **Observed live** (2026‑07‑03): `glam launch
+  claude -- -p "…"` reached GLM‑5.2 and the ledger recorded `requestedModel:
+  glm‑5.2`, `model: glm‑5p2`, real cost — the one‑command path, verified.
 - A passing **smoke test** that drives the real CLI the way a human would.
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 
@@ -456,6 +465,36 @@ every release.)
 
 If a capability is partial, the docs and this section say so. A feature is **DONE** only
 when a real human end‑user can use it.
+
+### Keep Claude Code, honestly
+
+One command puts you on GLM 5.2 with a status line that tells the truth:
+
+```bash
+glam launch claude
+```
+
+`glam launch claude` auto‑starts the glamfire gateway on 127.0.0.1:4114 (if it is not
+already running), sets the env block that points Claude Code at it **and** makes the
+status line read **"GLM 5.2 (via glamfire)"** instead of an Anthropic model id, then
+execs `claude` with stdio inherited. When claude exits, the gateway it started stops
+cleanly. Pass args through with `--`:
+
+```bash
+glam launch claude -- -p "explain this repo"
+glam launch claude -- --model foo   # anything after -- is claude's, verbatim
+```
+
+If you already run `glam serve` yourself, export its token and `glam launch claude`
+will reuse your server instead of starting one:
+
+```bash
+export GLAM_SERVE_TOKEN="<token `glam serve` printed>"
+glam launch claude
+```
+
+Every request lands in `~/.glam/usage.jsonl` with the honest id (`requestedModel:
+glm‑5.2`) and the real served model (`model: glm‑5p2`) — watch it with `glam usage`.
 
 ---
 

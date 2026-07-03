@@ -25,6 +25,7 @@ const COMMANDS = [
   'run',
   'route',
   'serve',
+  'launch',
   'usage',
   'models',
   'brain',
@@ -44,6 +45,8 @@ Commands:
   serve              Local Anthropic/OpenAI-compatible gateway: keep Claude Code
                      (ANTHROPIC_BASE_URL) or any OpenAI client, run it on GLM 5.2
                      with glamfire's meter, router, budget stops, and ledger under it
+  launch <integration>  Launch an agent on GLM 5.2 via glam serve (claude):
+                     auto-starts the gateway, sets an honest status line, execs the agent
   usage              Show spend/token usage from the local ledger (offline)
   models             Show the model/provider landscape: prices, quant, context
                      (--refresh pulls current prices from provider APIs)
@@ -104,6 +107,10 @@ async function main(argv) {
   if (first === 'serve') {
     const { cmdServe } = await import('./serve.mjs');
     return cmdServe(args.slice(1), { version: VERSION });
+  }
+  if (first === 'launch') {
+    const { cmdLaunch } = await import('./launch.mjs');
+    return cmdLaunch(args.slice(1), { version: VERSION });
   }
   if (first === 'usage') {
     const { cmdUsage } = await import('./usage.mjs');

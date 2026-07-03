@@ -54,6 +54,9 @@ Hard budget stops (config glam.toml — rejected BEFORE any provider call):
   monthlyUsd = 10.0                       # per client label
 
 Requires FIREWORKS_API_KEY (the upstream is real). Run \`glam doctor\` to check.
+
+See also: \`glam launch claude\` — one command that auto-starts this gateway, sets
+an honest Claude Code status line ("GLM 5.2 (via glamfire)"), and execs \`claude\`.
 `;
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
