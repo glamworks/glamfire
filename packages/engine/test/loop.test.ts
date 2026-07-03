@@ -257,6 +257,65 @@ describe('plan -> act -> observe loop', () => {
     expect(run.steps.filter((s) => s.type === 'model_turn')).toHaveLength(3);
   });
 
+  it('finishes with status interrupted when the signal aborts mid-request (Ctrl-C)', async () => {
+    // A "provider" whose request rejects the way a real aborted fetch does:
+    // the abort fires while the request is in flight.
+    const controller = new AbortController();
+    const adapter = scriptedAdapter([turn({ text: 'never delivered' })]);
+    adapter.stream = (state: RunState) =>
+      new Promise<ModelTurnResult>((_resolve, reject) => {
+        // The engine passed the signal through RunState — that is what makes
+        // the cancellation real at the HTTP layer.
+        expect(state.signal).toBe(controller.signal);
+        state.signal?.addEventListener('abort', () => {
+          reject(new DOMException('This operation was aborted', 'AbortError'));
+        });
+        controller.abort();
+      });
+    const run = await runTask({
+      task: { goal: 'long task', budget: { maxUSD: 1 } },
+      adapter,
+      tools: builtinTools(),
+      config: baseConfig,
+      cwd: process.cwd(),
+      signal: controller.signal,
+    });
+    expect(run.status).toBe('interrupted');
+    const final = run.steps.at(-1);
+    expect(final?.type === 'final' && final.reason).toBe('interrupted');
+  });
+
+  it('stops dispatching tools after an abort — no orphaned side effects', async () => {
+    // The turn completes and requests a tool call, but the user hit Ctrl-C while
+    // it was streaming: the completed turn is accounted, the tool NEVER runs.
+    const controller = new AbortController();
+    const adapter = scriptedAdapter([
+      turn({
+        toolCalls: [{ id: 'c1', name: 'calculator', arguments: { expression: '1+1' } }],
+        finishReason: 'tool_calls',
+      }),
+    ]);
+    const scripted = adapter.stream.bind(adapter);
+    adapter.stream = async (state: RunState, onEvent: (ev: StreamEvent) => void) => {
+      const result = await scripted(state, onEvent);
+      controller.abort(); // Ctrl-C lands as the turn finishes
+      return result;
+    };
+    const run = await runTask({
+      task: { goal: 'tooling', budget: { maxUSD: 1 } },
+      adapter,
+      tools: builtinTools(),
+      config: baseConfig,
+      cwd: process.cwd(),
+      signal: controller.signal,
+    });
+    expect(run.status).toBe('interrupted');
+    // The completed model turn is in the record; the tool dispatch never ran.
+    expect(run.steps.some((s) => s.type === 'model_turn')).toBe(true);
+    expect(run.steps.some((s) => s.type === 'tool_result')).toBe(false);
+    expect(run.usage.outputTokens).toBeGreaterThan(0);
+  });
+
   it('reports unknown tools back to the model as an error observation', async () => {
     const adapter = scriptedAdapter([
       turn({

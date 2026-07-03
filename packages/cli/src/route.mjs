@@ -10,14 +10,9 @@ import { basename, resolve } from 'node:path';
 import { ConfigError, loadConfig } from '@glamfire/config';
 import { PolicyError, explainDecision, formatReport } from '@glamfire/router';
 import { buildModelRegistry, buildRouter } from './router.mjs';
+import { CODES, color, useColor } from './ui.mjs';
 
-const DIM = '\x1b[2m';
-const RESET = '\x1b[0m';
-const FLAME = '\x1b[38;5;208m';
-
-function color(on, code, s) {
-  return on ? `${code}${s}${RESET}` : s;
-}
+const { DIM, FLAME } = CODES;
 
 const ROUTE_HELP = `glam route — show how a task would be routed (offline, no provider call).
 
@@ -53,14 +48,20 @@ function parseArgs(args) {
       case '--file':
         opts.files.push(next());
         break;
-      case '--output-tokens':
-        opts.outputTokens = Number(next());
+      case '--output-tokens': {
+        const raw = next();
+        const n = Number(raw);
+        if (!Number.isFinite(n)) throw new Error(`option ${a} expects a number, got "${raw}"`);
+        opts.outputTokens = n;
         break;
+      }
       case '--json':
         opts.json = true;
         break;
       default:
-        if (a.startsWith('--')) throw new Error(`unknown option "${a}"`);
+        // Reject ANY unknown flag (single- or double-dash) instead of silently
+        // folding it into the prompt text.
+        if (a.startsWith('-') && a !== '-') throw new Error(`unknown option "${a}"`);
         positional.push(a);
     }
   }
@@ -88,7 +89,7 @@ export async function cmdRoute(argv, { version }) {
     return;
   }
 
-  const useColor = process.stdout.isTTY === true;
+  const useColorOut = useColor(process.stdout);
 
   let loaded;
   try {
@@ -176,7 +177,7 @@ export async function cmdRoute(argv, { version }) {
 
   const out = process.stdout;
   out.write(
-    `${color(useColor, FLAME, `glamfire ${version}`)} ${color(useColor, DIM, '· route (dry-run, no provider call)')}\n`,
+    `${color(useColorOut, FLAME, `glamfire ${version}`)} ${color(useColorOut, DIM, '· route (dry-run, no provider call)')}\n`,
   );
   out.write(`  task: ${opts.goal}\n\n`);
   out.write(`${explainDecision(decision)}\n\n`);
