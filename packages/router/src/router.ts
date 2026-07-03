@@ -41,6 +41,8 @@ export interface RouterOptions {
   outputTokens?: number;
   /** Custom signal-extractor pipeline. */
   extractors?: SignalExtractor[];
+  /** Callback to persist a terminal decision record to longitudinal history local-first store. */
+  onTaskComplete?: (record: DecisionRecord & { timestamp: string; taskId: string }) => Promise<void> | void;
 }
 
 /** A fully-resolved routing decision (classification + policy), for `--explain`. */
@@ -81,6 +83,20 @@ export class Router implements RouterHook {
     return input;
   }
 
+  private async flushHistory(task: Task): Promise<void> {
+    if (!this.opts.onTaskComplete || !this.current) return;
+    
+    try {
+      await this.opts.onTaskComplete({
+        ...this.current,
+        timestamp: new Date().toISOString(),
+        // Fix: Use a deterministic or sequential identifier since task.id doesn't exist
+        taskId: `task_${Date.now()}`
+      });
+    } catch (err) {
+      // Invariant: Writing profiling history must never crash primary task loops!
+    }
+  }
   /**
    * Compute the full routing decision for a task without mutating cascade state.
    * Pure relative to the registry; used by `glam route` for the offline dry-run.
@@ -146,6 +162,8 @@ export class Router implements RouterHook {
     if (this.current) this.current.actualUsd = input.run.costUSD;
 
     if (v.passed) {
+      // Terminal Point 1: Execution passed successfully!
+      await this.flushHistory(input.task);
       return { verification };
     }
 
@@ -154,6 +172,8 @@ export class Router implements RouterHook {
     const next = this.cascade[this.position + 1];
     if (from === undefined || next === undefined) {
       // No stronger candidate left; accept the best-so-far answer.
+      // Terminal Point 2: Failed but ran out of cascade layers to escalate to.
+      await this.flushHistory(input.task);
       return { verification };
     }
 
@@ -163,6 +183,8 @@ export class Router implements RouterHook {
     const nextProjected = next.pricing(this.estimate);
     const maxUSD = input.task.budget.maxUSD;
     if (maxUSD !== undefined && input.run.costUSD + nextProjected > maxUSD) {
+      // Terminal Point 3: Escalation would breach the task's budget ceiling.
+      await this.flushHistory(input.task);
       return { verification };
     }
 

@@ -21,7 +21,9 @@ for (const s of [process.stdout, process.stderr]) {
 
 const VERSION = getVersion();
 const BANNER = `glamfire ${VERSION}  ·  the open harness for the last mile of AI`;
-const COMMANDS = ['run', 'route', 'usage', 'models', 'config', 'doctor', 'version', 'help'];
+
+// 🔹 ADDED: 'report' to the valid commands list
+const COMMANDS = ['run', 'route', 'usage', 'models', 'config', 'doctor', 'version', 'help', 'report'];
 
 const HELP = `${BANNER}
 
@@ -34,6 +36,7 @@ Commands:
   models             Show the model/provider landscape: prices, quant, context
                      (--refresh pulls current prices from provider APIs)
   config             Show the resolved, layered, secret-redacted configuration
+  report             Show task-distribution metrics & longitudinal realized savings (offline)
   version            Print the glamfire version
   doctor             Check the local environment is ready to run glamfire
   help               Show this help
@@ -84,6 +87,11 @@ async function main(argv) {
   if (first === 'usage') {
     const { cmdUsage } = await import('./usage.mjs');
     return cmdUsage(args.slice(1), { version: VERSION });
+  }
+  // 🔹 ADDED: Lazy routing for the report sub-command
+  if (first === 'report') {
+    const { cmdReport } = await import('./report.mjs');
+    return cmdReport(args.slice(1), { version: VERSION });
   }
   if (first === 'models') {
     const { cmdModels } = await import('./models.mjs');

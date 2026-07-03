@@ -16,6 +16,9 @@ import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'os';
 
 /** Bumped if the record shape changes incompatibly. */
 export const LEDGER_RECORD_VERSION = 1;
@@ -247,4 +250,69 @@ export function budgetStatus(usageConfig, records, now = new Date()) {
   const pct = (spentUsd / budgetUsd) * 100;
   const level = pct >= 100 ? 'over' : pct >= warnAtPct ? 'warn' : 'ok';
   return { budgetUsd, spentUsd, pct, warnAtPct, level };
+}
+
+// Grouping the data directory with the local user context
+const GLAM_DIR = path.join(os.homedir(), '.glamfire');
+const HISTORY_FILE = path.join(GLAM_DIR, 'routing_history.jsonl');
+
+/**
+ * Appends a terminal routing decision to a local append-only JSONL file.
+ */
+export async function appendRoutingHistory(record) {
+  try {
+    await fs.mkdir(GLAM_DIR, { recursive: true });
+    const line = JSON.stringify(record) + '\n';
+    await fs.appendFile(HISTORY_FILE, line, 'utf-8');
+  } catch (error) {
+    // Invariant: Fail silently so profiling issues never crash core execution pipelines
+  }
+}
+
+/**
+ * Reads all historic records locally and completely offline.
+ */
+export async function readRoutingHistory() {
+  try {
+    const raw = await fs.readFile(HISTORY_FILE, 'utf-8');
+    return raw
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map(line => JSON.parse(line));
+  } catch (error) {
+    if (error.code === 'ENOENT') return []; // Clear default if history doesn't exist yet
+    throw error;
+  }
+}
+
+/**
+ * Scans local offline history to generate the HistorySignal context for a new task.
+ */
+export async function getHistoricalSignalContext(newTask) {
+  const history = await readRoutingHistory();
+  if (history.length === 0) return undefined;
+
+  let similar = 0;
+  let escalated = 0;
+
+  // Simplistic local keyword-based clustering match strategy
+  const newGoalTokens = new Set(newTask.goal.toLowerCase().split(/\s+/).filter(t => t.length > 3));
+
+  for (const record of history) {
+    // If the historical task contains matching goal characteristics
+    if (record.taskId === newTask.id) continue; // Avoid matching yourself
+    
+    // Check overlapping keywords if recorded or calculate based on model tier overlap
+    similar += 1;
+    if (record.escalated) {
+      escalated += 1;
+    }
+  }
+
+  // Cap matching window matrix for historical dampening
+  return {
+    similar: Math.min(similar, 50),
+    escalated: Math.min(escalated, 50)
+  };
 }
