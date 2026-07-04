@@ -137,7 +137,7 @@ savings get real.) Now make an actual call:
 ```console
 $ glam run "Compute (2 + 3) * 4 using the calculator tool." --max-usd 0.05
 glamfire 0.4.1 · run
-  adapter: fireworks-glm   model: accounts/fireworks/models/glm-5p2
+  provider: fireworks   model: glm-5.2 (accounts/fireworks/models/glm-5p2)
   routing: center (score 0.17, confidence 0.57) → accounts/fireworks/models/glm-5p2
   effort: high   tier: standard   budget: $0.0500 / 8 steps
 
@@ -168,7 +168,7 @@ each turn's output tokens by the remaining budget:
 ```console
 $ glam run "Explain the history of the transistor in detail." --max-usd 0.001
 glamfire 0.4.1 · run
-  adapter: fireworks-glm   model: accounts/fireworks/models/glm-5p2
+  provider: fireworks   model: glm-5.2 (accounts/fireworks/models/glm-5p2)
   routing: center (score 0.17, confidence 0.57) → accounts/fireworks/models/glm-5p2
   effort: high   tier: standard   budget: $0.001000 / 8 steps
 
@@ -176,12 +176,15 @@ The transistor is one of the most important inventions of the 20th century, the
 foundational building block of all modern electronics. […]
 
 ──
-stopped: budget/step ceiling reached
+stopped: budget/step ceiling reached (exit 3)
 tokens: in 1880 (cached 0) · out 227 (2107 total)   cost: $0.003631   steps: 3   status: budget_exhausted
 recorded to ~/.glam/usage.jsonl — see `glam usage`
 ```
 
-The run stops mid-task and reports `budget_exhausted`, never a fake `done`. The cost
+The run stops mid-task and reports `budget_exhausted`, never a fake `done` — and it
+exits **3**, so a script or CI job can tell a budget stop from a success without
+parsing output (`echo $?` → `3`; the full documented scheme is 0 done, 1 error,
+2 usage error, 3 budget/step ceiling, 130 interrupted — see `glam run --help`). The cost
 line is the honest spend actually incurred — with a ceiling this tiny it can overshoot
 by the final turn's input tokens (the check is per-turn), and glamfire reports that
 number rather than pretending the ceiling was free.

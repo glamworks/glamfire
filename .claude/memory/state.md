@@ -241,3 +241,16 @@ orchestrator-integrated on `integration/context-wars-wave`, 354 tests, smoke PAS
 - BLOCKED ON USER: (a) glamworks.dev domain dead (no DNS) — register+mailbox or stay on
   GitHub reporting; (b) GitHub social-preview image upload (Settings, manual);
   (c) npm/site copy for next release picks up new keywords/description at next tag.
+
+## 2026-07-03 — the dogfood era begins (v0.6.0)
+
+Bootstrap closed. Shipped today: memory in the run loop (#27), budget exit code 3
+(#23), honest run header (#24), markdown-first brain w/ glam brain CLI (#36),
+glam serve router-proxy live-verified under real Claude Code (#41), adopt-claude-
+code seed (#29 phase 1). Releases v0.5.0 + v0.6.0 tagged. Global `glam` symlinks
+to this repo's packages/cli/src/index.mjs — always latest main; run `npm run
+build` after merging TS changes. Project brain (.glam/brain.db) seeded from
+Claude Code memory (9 files, idempotent re-runs). Owner now develops glamfire
+WITH glamfire (GLM 5.2/Fireworks). Outstanding: feat/local-adapter worktree
+(builder in flight, #25) — integrate on arrival. Research briefs 27–32 landed;
+issues #29–49 file the full directive backlog.

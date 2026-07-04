@@ -246,6 +246,7 @@ export class FireworksGlmAdapter extends OpenAICompatibleAdapter {
     const info = fireworksModelInfo(config.model);
     super({
       id: 'fireworks-glm',
+      provider: 'fireworks',
       baseUrl: config.baseUrl,
       apiKey: config.apiKey,
       model: config.model,

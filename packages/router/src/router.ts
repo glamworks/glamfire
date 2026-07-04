@@ -43,6 +43,8 @@ export interface RouterOptions {
   extractors?: SignalExtractor[];
   /** Callback to persist a terminal decision record to longitudinal history local-first store. */
   onTaskComplete?: (record: DecisionRecord & { timestamp: string; taskId: string }) => Promise<void> | void;
+  /** Restrict routing to self-host (local adapter) models; overrides routing.localOnly. */
+  localOnly?: boolean;
 }
 
 /** A fully-resolved routing decision (classification + policy), for `--explain`. */
@@ -113,6 +115,7 @@ export class Router implements RouterHook {
     );
     const selection = evaluatePolicy(this.opts.routing, classification, this.opts.registry, {
       estimate,
+      ...(this.opts.localOnly !== undefined ? { localOnly: this.opts.localOnly } : {}),
     });
     const frontier = this.opts.registry.frontier(estimate);
     const baselineUsd = frontier ? frontier.pricing(estimate) : selection.projectedUsd;

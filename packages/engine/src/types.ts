@@ -270,6 +270,13 @@ export type StreamEvent =
 export interface AdapterContract {
   /** Stable adapter id, e.g. 'fireworks-glm'. */
   id: string;
+  /**
+   * Stable lowercase provider id actually serving the model (e.g. 'fireworks').
+   * Optional for compatibility; display surfaces fall back to deriving it from
+   * the adapter id. Shipped adapters all declare it (issue #24: the run header
+   * must show the provider, never a shared adapter's internal id).
+   */
+  provider?: string;
   capabilities: Capabilities;
   /** Neutral run state -> provider request (system shaping, tool grammar, knobs). */
   encodeRequest(state: RunState, opts?: { stream?: boolean }): ProviderRequest;

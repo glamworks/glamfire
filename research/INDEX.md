@@ -32,3 +32,9 @@ base is part of the context‑rollover survival kit (see [CLAUDE.md](../CLAUDE.m
 | 24 | [24-creator-thesis-update.md](24-creator-thesis-update.md) | Creator thesis refresh (Jun–Jul 2026): context wars, routing, receipts |
 | 25 | [25-provider-landscape-2026-07.md](25-provider-landscape-2026-07.md) | Open-weight model × US provider landscape, cited prices + registry seed (July 2026) |
 | 26 | [26-ornith.md](26-ornith.md) | Ornith-1.0 (DeepReinforce): self-scaffolding coding models; licensing, hosting, harness-swing evidence |
+| 27 | [27-dwarfstar.md](27-dwarfstar.md) | DwarfStar/DS4 (antirez): local engine for DeepSeek V4 Flash; $0-token local venue for the budget tier; adapter needs |
+| 28 | [28-claude-code-wrap.md](28-claude-code-wrap.md) | Deep-wrapping Claude Code: memory surfaces, hooks/OTEL/MCP, model swap, ToS-safe tri-mode architecture |
+| 29 | [29-capability-grounding.md](29-capability-grounding.md) | Capability-grounded routing: benchmark/pricing data sources + licensing, task→benchmark taxonomy, capability×price scorer, per-task cost estimation |
+| 30 | [30-team-sync.md](30-team-sync.md) | Team sync: personal/team brain split, git+append-only sync, one-unit Cloudflare deploy ($0–5/mo), Access auth, team usage/cost + audit schema |
+| 31 | [31-flat-file-knowledge.md](31-flat-file-knowledge.md) | Flat-file knowledge: Karpathy grep+markdown thesis, files-as-truth + SQLite-as-index prior art, sync semantics, source-vs-summary frontmatter, objection-killing one-liner |
+| 32 | [32-number-one.md](32-number-one.md) | Road to #1: mid-2026 class map (opencode/OpenClaw/pi/Goose…), table-stakes gaps, differentiators, ranked top-20 backlog, realistic wedge |

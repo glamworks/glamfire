@@ -1,0 +1,23 @@
+{
+  "id": "chatcmpl-106",
+  "object": "chat.completion",
+  "created": 1783111489,
+  "model": "qwen3:0.6b",
+  "system_fingerprint": "fp_ollama",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"answer\": 20, \"unit\": \"none\"}",
+        "reasoning": "Okay, the user wants me to respond with only the exact JSON object provided. Let me check the instructions again. The user said to respond with only that JSON, no code fences or prose. So I need to make sure I don't add anything else. The example given is {\"answer\": 20, \"unit\": \"none\"}. I should confirm that I'm following the exact format. Alright, that's all. No extra text or explanations.\n"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 62,
+    "completion_tokens": 111,
+    "total_tokens": 173
+  }
+}

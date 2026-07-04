@@ -71,11 +71,31 @@ baseUrl = "https://api.openai.com/v1"
 models = ["gpt-5"]
 credential = { env = "OPENAI_API_KEY" }
 
-# Fully local, fully private operation via an OpenAI-compatible server (vLLM/SGLang).
+# Fully local, fully private operation via ANY OpenAI-compatible server:
+# Ollama (http://localhost:11434/v1), vLLM/SGLang (http://localhost:8000/v1),
+# LM Studio (http://localhost:1234/v1), or antirez's DwarfStar/DS4 serving
+# DeepSeek V4 Flash (http://127.0.0.1:8000/v1). Wired via the `local` adapter,
+# live-verified against a real Ollama daemon. $0/token = the REAL marginal
+# price of owned hardware. Run `glam models` for the self-host venue rows
+# (incl. Ornith-1.0 and the DwarfStar-DS4 honesty caveats).
+#
+# HONESTY CONTRACT: glamfire never guesses what a self-hosted server serves.
+# YOU declare the model id, context cap, and capabilities; an undeclared
+# capability is absent (the router's capability floor), so a small local model
+# can never silently win a route that needs more than it declares.
 [providers.local]
 baseUrl = "http://localhost:8000/v1"
 models = []
-# Local servers often need no key; omit `credential` entirely.
+# Local servers usually need no key; omit `credential` entirely.
+# vLLM --api-key mode: credential = { env = "GLAM_LOCAL_API_KEY" }
+#
+# Example — Ollama (run `ollama pull qwen3:0.6b`, then uncomment):
+# baseUrl = "http://localhost:11434/v1"
+# models = ["qwen3:0.6b"]
+# contextWindow = 40960                        # the served model's real window
+# capabilities = ["tool_calling", "streaming"] # declare ONLY what it really has
+# usdPerMInput = 0.0                           # $0 self-host default; override
+# usdPerMOutput = 0.0                          # only for internal accounting
 
 # ---------------------------------------------------------------------------
 # Routing policy (declarative) — the @glamfire/router contract (SPEC §5.3).
@@ -88,6 +108,19 @@ models = []
 [routing]
 # Model used when no rule matches.
 default = "accounts/fireworks/models/glm-5p2"
+# Privacy/offline mode: restrict routing to $0 self-host models from
+# providers.local. Fails LOUD when no local model fits a task — never a silent
+# hosted fallback. Per-run override: `glam run --local` / `glam route --local`.
+# localOnly = true
+
+# Self-host tier: an explicitly listed local model wins center work at $0, and
+# the hosted workhorse stays in the cascade as the verification-failure
+# escalation (research/04). Requires providers.local.models above to list it.
+# Put this rule ABOVE the plain GLM center rule so it matches first.
+# [[routing.rules]]
+# distribution = "center"
+# requires = ["tool_calling"]
+# candidates = ["qwen3:0.6b", "accounts/fireworks/models/glm-5p2"]
 
 # Center-of-distribution work -> GLM 5.2 on Fireworks (cheap workhorse).
 [[routing.rules]]
@@ -170,3 +203,45 @@ maxSteps = 8               # plan->act->observe loop cap
 [usage]
 # monthlyBudgetUsd = 25.0   # soft monthly spend budget in USD (opt-in)
 warnAtPct = 80              # warn when month-to-date spend crosses this %
+
+# ---------------------------------------------------------------------------
+# Memory — the brain in the run loop (SPEC §5.2). Every `glam run` first
+# recalls relevant records from the project's local brain store (offline hybrid
+# retrieval: vector + keyword + recency + provenance) and packs the top hits —
+# under a hard token cap, with record ids and sources — into the model context;
+# afterward a structured episode (task, outcome, decisions, files touched,
+# models, cost) is written back so future runs remember. Local-first and owned:
+# the store is a single portable SQLite file, never uploaded, exportable to
+# JSONL. Zero recalls from a fresh store is normal, not an error. Disable
+# per-run with `--no-memory` or globally here / via GLAM_MEMORY=false.
+# ---------------------------------------------------------------------------
+[memory]
+enabled = true              # master switch for recall + episode capture
+# store = ".glam/brain.db"  # brain store path (default: <project>/.glam/brain.db)
+recallLimit = 6             # top-K records considered per run
+recallTokenBudget = 1200    # hard token cap for the packed recall block
+
+# ---------------------------------------------------------------------------
+# glam serve — the router-as-proxy gateway (docs/PROXY.md). Keep Claude Code /
+# opencode / Cursor / any OpenAI SDK and point its base URL here: requests run
+# on GLM 5.2 (or the router's choice), metered exactly into the usage ledger.
+#   export ANTHROPIC_BASE_URL="http://127.0.0.1:4114"
+#   export ANTHROPIC_AUTH_TOKEN="<token `glam serve` prints>"
+# The bearer token is a secret and never lives in this file: set GLAM_SERVE_TOKEN
+# or --token, else a per-session token is generated and printed once.
+# ---------------------------------------------------------------------------
+[serve]
+port = 4114                 # 0 = pick an ephemeral port and print it
+bind = "127.0.0.1"          # non-loopback binds REQUIRE an explicit token
+target = "pin"              # "pin" -> serve.model for every request; "route" ->
+                            # the cost-aware router picks per request
+# model = "accounts/fireworks/models/glm-5p2"   # pinned target (default: top-level model)
+
+# Unlike [usage] (alerting only), these are HARD stops: an over-budget request
+# is rejected with a clean provider-shaped error BEFORE any provider is called.
+[serve.budgets]
+# monthlyUsd = 25.0         # all proxy traffic, month-to-date
+# Per-client stops, keyed by the client label (x-glam-client header, else the
+# user-agent family: claude-code, opencode, cursor, curl, ...):
+# [serve.budgets.clients.claude-code]
+# monthlyUsd = 10.0

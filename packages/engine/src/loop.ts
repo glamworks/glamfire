@@ -23,7 +23,12 @@ import {
   emptyUsage,
 } from './types.js';
 
-const DEFAULT_SYSTEM =
+/**
+ * The engine's neutral system prompt. Exported so surfaces (the CLI) can
+ * compose on top of it — e.g. the brain packs recalled memories under this
+ * base text (SPEC §5.2: "the brain packs context into RunState.system").
+ */
+export const DEFAULT_SYSTEM =
   'You are glamfire, an open, model-agnostic agent. Work the task using the ' +
   'available tools when they help. Call a tool only when you need its result; ' +
   'when you have enough to answer, stop calling tools and give the final answer ' +

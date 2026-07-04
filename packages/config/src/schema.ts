@@ -50,30 +50,7 @@ const keychainCredentialSchema = z.strictObject({
 export const credentialRefSchema = z.union([envCredentialSchema, keychainCredentialSchema]);
 export type CredentialRef = z.infer<typeof credentialRefSchema>;
 
-// --- providers ---------------------------------------------------------------
-
-export const providerSchema = z.strictObject({
-  /** Base URL of the provider's OpenAI-compatible (or native) endpoint. */
-  baseUrl: z.string().url(),
-  /** Known model ids served by this provider (used by the router as candidates). */
-  models: z.array(z.string().min(1)).default([]),
-  /** Where to resolve this provider's API credential from. Optional for local. */
-  credential: credentialRefSchema.optional(),
-});
-export type ProviderConfig = z.infer<typeof providerSchema>;
-
-export const providersSchema = z.strictObject({
-  fireworks: providerSchema,
-  together: providerSchema,
-  anthropic: providerSchema,
-  openai: providerSchema,
-  local: providerSchema,
-});
-export type ProvidersConfig = z.infer<typeof providersSchema>;
-/** Stable provider keys the harness ships adapters (or adapter slots) for. */
-export type ProviderName = keyof ProvidersConfig;
-
-// --- routing policy (declarative; the @glamfire/router contract) -------------
+// --- capability tokens (shared by routing rules and local capability floors) --
 
 /**
  * Capability tokens a task can require. The router filters a rule's `candidates`
@@ -90,6 +67,60 @@ export const capabilitySchema = z.enum([
   'long_context',
 ]);
 export type Capability = z.infer<typeof capabilitySchema>;
+
+// --- providers ---------------------------------------------------------------
+
+export const providerSchema = z.strictObject({
+  /** Base URL of the provider's OpenAI-compatible (or native) endpoint. */
+  baseUrl: z.string().url(),
+  /** Known model ids served by this provider (used by the router as candidates). */
+  models: z.array(z.string().min(1)).default([]),
+  /** Where to resolve this provider's API credential from. Optional for local. */
+  credential: credentialRefSchema.optional(),
+});
+export type ProviderConfig = z.infer<typeof providerSchema>;
+
+/**
+ * The local/self-host provider: any OpenAI-compatible server the user runs
+ * (Ollama, vLLM, SGLang, LM Studio, antirez's DwarfStar/DS4). Unlike hosted
+ * providers, glamfire cannot know the served model's capabilities, context
+ * window, or cost a priori — the USER declares them here, and the declarations
+ * are honest routing inputs (the capability floor): an undeclared capability is
+ * absent, never guessed. Marginal token price defaults to $0 (owned hardware);
+ * it can be overridden for internal cost attribution, never invented.
+ */
+export const localProviderSchema = providerSchema.extend({
+  /** Context-window cap in tokens for the served model (conservative default: 32768). */
+  contextWindow: z.number().int().positive().optional(),
+  /** Max output tokens per turn (default: 8192, clamped to contextWindow). */
+  maxOutputTokens: z.number().int().positive().optional(),
+  /**
+   * Capability tokens the served model actually supports. Conservative default:
+   * ["tool_calling", "streaming"] — declare more only when your server/model
+   * really provides it (this is the router's capability floor for local models).
+   */
+  capabilities: z.array(capabilitySchema).optional(),
+  /** USD per 1M input tokens (default 0 — self-host marginal price). */
+  usdPerMInput: z.number().nonnegative().optional(),
+  /** USD per 1M cached-input tokens (default 0). */
+  usdPerMCachedInput: z.number().nonnegative().optional(),
+  /** USD per 1M output tokens (default 0). */
+  usdPerMOutput: z.number().nonnegative().optional(),
+});
+export type LocalProviderConfig = z.infer<typeof localProviderSchema>;
+
+export const providersSchema = z.strictObject({
+  fireworks: providerSchema,
+  together: providerSchema,
+  anthropic: providerSchema,
+  openai: providerSchema,
+  local: localProviderSchema,
+});
+export type ProvidersConfig = z.infer<typeof providersSchema>;
+/** Stable provider keys the harness ships adapters (or adapter slots) for. */
+export type ProviderName = keyof ProvidersConfig;
+
+// --- routing policy (declarative; the @glamfire/router contract) -------------
 
 /**
  * One declarative routing rule. Match conditions are ANDed; an omitted condition
@@ -118,6 +149,14 @@ export const routingSchema = z.strictObject({
   default: z.string().min(1),
   /** Declarative rules, evaluated in order; first match wins. */
   rules: z.array(routingRuleSchema).default([]),
+  /**
+   * Restrict routing to $0 self-host models served by `providers.local`
+   * (privacy/offline mode). With this set, hosted candidates are ineligible and
+   * the router fails LOUD when no local model can satisfy a task — it never
+   * silently falls back to a hosted provider. CLI override: `glam run --local`.
+   * Absent = false (hosted and local candidates compete normally).
+   */
+  localOnly: z.boolean().optional(),
 });
 export type RoutingConfig = z.infer<typeof routingSchema>;
 
@@ -185,6 +224,64 @@ export const usageSchema = z.strictObject({
 });
 export type UsageConfig = z.infer<typeof usageSchema>;
 
+// --- memory (the brain in the run loop — SPEC §5.2, issue #27) ----------------
+
+/**
+ * Memory in the loop: before each `glam run` the task is used to query the
+ * project's brain store and the top hits are packed (hard token cap, full
+ * provenance) into the model context; after the run a structured episode is
+ * written back so future runs recall it. Offline by default (hash embedder),
+ * local-first, never uploaded. Disable per-run with `--no-memory`, per-project
+ * with `enabled = false`, or via GLAM_MEMORY=false.
+ */
+export const memorySchema = z.strictObject({
+  /** Master switch for run-loop memory (retrieval + episode capture). */
+  enabled: z.boolean(),
+  /** Brain store file. Default: `<project>/.glam/brain.db` (project-scoped). */
+  store: z.string().min(1).optional(),
+  /** Max recalled records considered per run (top-K before token packing). */
+  recallLimit: z.number().int().min(1).max(50),
+  /** Hard token cap for the packed recall block in the model context. */
+  recallTokenBudget: z.number().int().min(64).max(32768),
+});
+export type MemoryConfig = z.infer<typeof memorySchema>;
+
+// --- serve (the router-as-proxy local gateway, `glam serve`) ------------------
+
+/** Per-client budget for the proxy (matched by the `x-glam-client` label). */
+export const serveClientBudgetSchema = z.strictObject({
+  /** Hard monthly spend stop for this client's proxy traffic, in USD. */
+  monthlyUsd: z.number().positive().optional(),
+});
+export type ServeClientBudget = z.infer<typeof serveClientBudgetSchema>;
+
+/**
+ * `glam serve` — a local Anthropic-Messages + OpenAI-chat-completions gateway
+ * that puts glamfire's meter, router, budget stops, and usage ledger under
+ * agents you already run (Claude Code, opencode, Cursor). Unlike `[usage]`
+ * (alerting only), `[serve.budgets]` values are HARD stops: an over-budget
+ * request is rejected with a clean provider-shaped error before any provider
+ * is called. The bearer token is a secret and therefore never lives here —
+ * it comes from `GLAM_SERVE_TOKEN`, `--token`, or is generated per session.
+ */
+export const serveSchema = z.strictObject({
+  /** TCP port to listen on (0 = pick an ephemeral port and print it). */
+  port: z.number().int().min(0).max(65535),
+  /** Bind address. Non-loopback binds require an explicit auth token. */
+  bind: z.string().min(1),
+  /** 'pin' sends every request to `serve.model`; 'route' asks the router per request. */
+  target: z.enum(['pin', 'route']),
+  /** Pinned target model id (defaults to the top-level `model`). */
+  model: z.string().min(1).optional(),
+  budgets: z.strictObject({
+    /** Hard monthly spend stop for ALL proxy traffic, in USD. */
+    monthlyUsd: z.number().positive().optional(),
+    /** Per-client hard stops, keyed by client label (`x-glam-client` header). */
+    clients: z.record(z.string(), serveClientBudgetSchema).default({}),
+  }),
+});
+export type ServeConfig = z.infer<typeof serveSchema>;
+
 // --- top level ---------------------------------------------------------------
 
 export const glamConfigSchema = z.strictObject({
@@ -198,6 +295,8 @@ export const glamConfigSchema = z.strictObject({
   sandbox: sandboxSchema,
   run: runSchema,
   usage: usageSchema,
+  memory: memorySchema,
+  serve: serveSchema,
 });
 export type GlamConfig = z.infer<typeof glamConfigSchema>;
 
@@ -250,6 +349,7 @@ export function builtinDefaults(): GlamConfig {
       // adapter (e.g. anthropic) is wired — see glam.example.toml. We do not ship
       // a default rule that references an adapter that is not yet real.
       rules: [{ distribution: 'center', requires: [], candidates: [GLM_DEFAULT_MODEL] }],
+      localOnly: false,
     },
     permissions: {
       // Least-privilege defaults (mirror engine defaultPolicy).
@@ -273,6 +373,20 @@ export function builtinDefaults(): GlamConfig {
     usage: {
       // No monthly budget by default (alerting is opt-in); warn at 80% once set.
       warnAtPct: 80,
+    },
+    memory: {
+      // Memory is live by default: local-first, offline embedder, project store.
+      enabled: true,
+      recallLimit: 6,
+      recallTokenBudget: 1200,
+    },
+    serve: {
+      // Loopback-only by default; a bearer token is ALWAYS required (generated
+      // per session when not configured). Budget stops are opt-in.
+      port: 4114,
+      bind: '127.0.0.1',
+      target: 'pin',
+      budgets: { clients: {} },
     },
   };
 }

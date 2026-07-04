@@ -24,6 +24,19 @@ const BANNER = `glamfire ${VERSION}  ·  the open harness for the last mile of A
 
 // 🔹 ADDED: 'report' to the valid commands list
 const COMMANDS = ['run', 'route', 'usage', 'models', 'config', 'doctor', 'version', 'help', 'report'];
+const COMMANDS = [
+  'run',
+  'route',
+  'serve',
+  'launch',
+  'usage',
+  'models',
+  'brain',
+  'config',
+  'doctor',
+  'version',
+  'help',
+];
 
 const HELP = `${BANNER}
 
@@ -32,9 +45,16 @@ Usage: glam <command> [options]
 Commands:
   run "<prompt>"     Run a task against GLM 5.2 on Fireworks (real inference)
   route "<prompt>"   Show how a task would be routed (offline, no provider call)
+  serve              Local Anthropic/OpenAI-compatible gateway: keep Claude Code
+                     (ANTHROPIC_BASE_URL) or any OpenAI client, run it on GLM 5.2
+                     with glamfire's meter, router, budget stops, and ledger under it
+  launch <integration>  Launch an agent on GLM 5.2 via glam serve (claude):
+                     auto-starts the gateway, sets an honest status line, execs the agent
   usage              Show spend/token usage from the local ledger (offline)
   models             Show the model/provider landscape: prices, quant, context
                      (--refresh pulls current prices from provider APIs)
+  brain              Your knowledge as flat markdown (add/list/query/sync/lint/rebuild);
+                     SQLite is just a rebuildable index — grep it, git it, own it
   config             Show the resolved, layered, secret-redacted configuration
   report             Show task-distribution metrics & longitudinal realized savings (offline)
   version            Print the glamfire version
@@ -44,6 +64,10 @@ Commands:
 Global options:
   -v, --version      Print the glamfire version
   -h, --help         Show this help
+
+Exit codes (stable — safe to script against):
+  0 done · 1 error · 2 usage error · 3 budget/step ceiling reached (run) · 130 interrupted
+  See \`glam run --help\` for the full table.
 
 Get started (first run):
   1. glam doctor                          check your environment (it tells you how to fix anything missing)
@@ -84,6 +108,14 @@ async function main(argv) {
     const { cmdRun } = await import('./run.mjs');
     return cmdRun(args.slice(1), { version: VERSION });
   }
+  if (first === 'serve') {
+    const { cmdServe } = await import('./serve.mjs');
+    return cmdServe(args.slice(1), { version: VERSION });
+  }
+  if (first === 'launch') {
+    const { cmdLaunch } = await import('./launch.mjs');
+    return cmdLaunch(args.slice(1), { version: VERSION });
+  }
   if (first === 'usage') {
     const { cmdUsage } = await import('./usage.mjs');
     return cmdUsage(args.slice(1), { version: VERSION });
@@ -96,6 +128,10 @@ async function main(argv) {
   if (first === 'models') {
     const { cmdModels } = await import('./models.mjs');
     return cmdModels(args.slice(1), { version: VERSION });
+  }
+  if (first === 'brain') {
+    const { cmdBrain } = await import('./brain.mjs');
+    return cmdBrain(args.slice(1), { version: VERSION });
   }
 
   const kind = first.startsWith('-') ? 'option' : 'command';

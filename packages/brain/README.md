@@ -2,10 +2,13 @@
 
 The open brain — local-first, portable, **owned** context and memory (SPEC §5.2).
 
-A single portable SQLite file with vector search (`sqlite-vec`) and full-text search
-(FTS5). Zero external services on macOS, Windows, and Linux. Four first-class record
-types, hybrid retrieval, and a **tested** export → import ownership invariant: your
-brain is rip-out-able, by design.
+**The markdown is the brain; SQLite is the index.** Knowledge lives as one readable
+markdown file per record (YAML frontmatter) in a flat `brain/` tree you can grep, edit,
+and commit to git; a single SQLite file (`sqlite-vec` vectors + FTS5) is a **derived,
+disposable index** — delete it and `Brain.rebuildFromFiles` / `glam brain rebuild`
+reconstructs it losslessly. Zero external services on macOS, Windows, and Linux. Four
+first-class record types, hybrid retrieval, and **two tested ownership invariants**:
+JSONL export → import, and markdown tree → full index rebuild.
 
 ## Quick start
 
@@ -38,8 +41,11 @@ node packages/brain/examples/demo.mjs
 
 ## Memory model
 
-Every record carries **provenance** (`source` required) and a **scope**
-(`private` / `project` / `team`). Nothing is ever uploaded.
+Every record carries **provenance** (`source` required), a **scope**
+(`private` / `project` / `team`), a **truth** classification (`source` = ground truth
+vs `summary` = regenerable synthesis with `derivedFrom` span links + content hashes),
+a **sharing** classification (`personal` / `team`, default `personal`), and **tags**.
+Nothing is ever uploaded.
 
 | Type | Meaning |
 |---|---|
@@ -109,6 +115,35 @@ and embeddings are identical, and embeddings also **regenerate** deterministical
   darwin-x64, darwin-arm64, linux-x64, linux-arm64, and windows-x64 — covering all three
   target OSes. No system SQLite or build toolchain is required for the default install.
 - The store file is a single portable file; copy it and it travels with your project.
+
+## The flat-file tree (research/31)
+
+Open a brain with `{ filesRoot: 'brain' }` and every write goes through to markdown:
+
+```
+brain/
+  INDEX.md        # generated catalog — one line per record
+  log.md          # append-only sync/conflict/tombstone log
+  sources/        # truth: source documents (ingested, immutable ground truth)
+  facts/          # durable atomic facts
+  notes/          # truth: summary — regenerable syntheses with derived_from links
+  pointers/       # external references
+  episodes/       # logged runs
+  .index/         # the disposable SQLite index (gitignored)
+```
+
+`brain.syncFiles()` (CLI: `glam brain sync`) reconciles by **content hash, never
+mtime**: human-edited files win for `truth: source`; newest wins only for regenerable
+summaries; conflicts are surfaced as `*.conflict.md` and logged, never silently
+merged. Plain markdown dropped into the tree is **adopted** as a record — the generic
+import path for any external source (including a Claude Code memory export).
+`lintTree()` (CLI: `glam brain lint`) flags stale summaries (a `derived_from` source
+whose content hash changed), broken frontmatter, and personal-data heuristics in
+`sharing: team` records.
+
+**The headline invariant** (`test/rebuild.test.ts` + smoke): delete
+`.index/brain.sqlite`, run `glam brain rebuild`, and every record, timestamp, chunk,
+and (deterministic) embedding is reconstructed from the markdown alone.
 
 ## Status
 

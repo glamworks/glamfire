@@ -4,6 +4,69 @@ All notable changes to this project are documented here. Based on the real git
 history; newest versions first. This project adheres to
 [Keep a Changelog](https://keepachangelog.com/).
 
+## v0.7.0
+
+- **feat(adapters): the self-host tier is real** — a `local` adapter for any
+  OpenAI-compatible server (Ollama, vLLM, LM Studio, SGLang, DwarfStar/DS4):
+  user-declared capabilities and context window (the router's capability floor —
+  never guessed), $0 default pricing (overridable, never invented), an explicit
+  note when a server reports no token usage, and byte-exact tool-call ID replay
+  promoted into the shared conformance battery for every adapter. New
+  `glam run --local` / `routing.localOnly` fail loud rather than silently
+  falling back to a hosted provider. Catalog gains ollama/vllm/lmstudio rows
+  plus dwarfstar-ds4 and ornith-1.0-9b/35b with honest beta/unverified flags.
+  Live-verified against a real Ollama daemon: keyless `glam run` tool
+  round-trip at `cost: $0.000000`. (#25)
+
+## v0.6.0
+
+- **feat(proxy): `glam serve` — the router-as-proxy gateway.** A local
+  Anthropic-Messages + OpenAI-chat-completions endpoint that puts glamfire's meter,
+  router, **hard** budget stops, and owned usage ledger under agents you already run
+  (Claude Code, opencode, Cursor, any OpenAI SDK). Streaming both dialects,
+  tool-call IDs round-trip verbatim, bearer auth always required, loopback by
+  default. Per-client budgets reject over-budget requests with a provider-shaped
+  error before any provider is called. `glam usage` gains a by-client breakdown.
+  Live-verified: real Claude Code headless through the proxy to GLM 5.2 on
+  Fireworks — 2 tasks with real tool calls metered at $0.0423 vs a $0.303
+  Claude-pricing estimate for the same session. See docs/PROXY.md. (#41)
+- **feat(brain): the markdown is the brain; SQLite is a rebuildable index.** Every
+  record is a readable markdown file with YAML frontmatter under `brain/`
+  (sources/facts/notes/pointers/episodes + generated INDEX.md and log.md):
+  `truth: source|summary`, `sharing: personal|team`, `derived_from` with per-link
+  content hashes. New `glam brain add|list|query|sync|lint|rebuild`. Content-hash
+  sync (file-wins for sources; conflicts surfaced, never merged silently). The
+  tested invariant: delete the .sqlite, rebuild losslessly from markdown. (#36)
+
+## v0.5.0
+
+- **feat(engine/brain): memory is in the loop** — every `glam run` recalls relevant
+  records from the project's local brain store (`.glam/brain.db`, hybrid retrieval,
+  hard token cap, full provenance in the packed context) and writes a structured
+  episode (task, outcome, decisions, files touched, models, real cost) back after
+  the run. Header/receipt show what was recalled; `--json` gets a `memory` object.
+  Controls: `--no-memory`, `[memory]` in glam.toml, `GLAM_MEMORY=false`. The
+  self-contained npm bundle (no native store) says so honestly and runs without
+  memory — it never fakes recall. Verified live: a teach run then a recall run
+  against real Fireworks/GLM; a `--no-memory` control run could not answer. (#27)
+- **feat(scripts): `adopt-claude-code.mjs`** — brownfield seed of `glam adopt`
+  (#29): discovers existing Claude Code state on this machine (global + project
+  CLAUDE.md, project memory, auto-memory) and imports it into the project brain,
+  idempotently, so runs recall it from the first task. Claude Code files are
+  read-only inputs — never modified.
+- **feat(cli): BEHAVIOR CHANGE —** a run stopped by a budget/step/token ceiling now
+  exits **3** instead of 0, so scripts and CI can tell a budget stop from `done`
+  without parsing output. The documented, stable scheme (`glam help` /
+  `glam run --help`): 0 done · 1 error · 2 usage error · 3 budget/step ceiling ·
+  130 interrupted (128+SIGINT). (#23)
+- **fix(cli):** the run header now shows the serving **provider and model family**
+  (e.g. `provider: fireworks   model: deepseek-v4-flash (…)`) instead of leaking the
+  shared adapter's internal id (`adapter: fireworks-glm`) on DeepSeek runs; adapters
+  now declare a stable `provider` id alongside their adapter id. (#24)
+- **fix(cli):** the `recorded to …` ledger line and the monthly-budget alert passed
+  the `useColor` *function* (always truthy) instead of the resolved boolean, forcing
+  raw ANSI codes into piped `glam run` output. Found while verifying #23.
+
 ## v0.4.1
 
 - **fix(scripts):** `version.mjs` main-module guard used naive `file://` string

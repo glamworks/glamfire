@@ -23,10 +23,10 @@
 
 Intelligence got roughly **98% cheaper**. Open models like **GLM 5.2** don't just keep
 up on the broad middle of everyday work — the routine coding task, the standard deck,
-the first‑pass copy, the familiar synthesis — they lead it, at a fraction of frontier
-cost, free to self‑host. The next useful AI product is not the one that wins a
-benchmark. It's the one that knows where your work is, what it's allowed to see, and
-what it's allowed to do.
+the first‑pass copy, the familiar synthesis — they lead it, rented by the token on
+Fireworks‑class serverless GPUs at a fraction of frontier cost. The next useful AI
+product is not the one that wins a benchmark. It's the one that knows where your work
+is, what it's allowed to see, and what it's allowed to do.
 
 So why is almost nobody switching? Because a model is a **brain in a jar**. What your
 company actually runs is the *work system* around it — the **harness**:
@@ -105,6 +105,36 @@ The difference is everything wrapped around that loop:
    prices with a key; Fireworks availability — it publishes no machine prices, and the
    command says so instead of faking freshness) and calls out every drop it can prove.
 
+### First and foremost: Claude Code users and teams
+
+**You do not need to leave Claude Code — or your Anthropic subscription.** Use Claude
+Code exactly as you do now — with Claude, with GLM 5.2 on Fireworks AI, or with another
+model — and glamfire's job is to put **memory, knowledge, and usage‑and‑billing
+visibility around it**, in files you own. And the door swings both ways: walk away
+from Claude Code any time in the future, and your memories and knowledge are already
+up to date in glamfire — no export ceremony, no lock‑in cliff.
+
+That is the destination. Here is where each piece stands today — nothing below claims
+to work before it does:
+
+- **The owned memory/knowledge store — shipping now.** `@glamfire/brain` works
+  end‑to‑end: local SQLite + vectors on your disk, hybrid retrieval, and a tested
+  export→import round‑trip (human‑readable JSONL, bit‑exact). See
+  [Current reality](#current-reality).
+- **Usage & billing visibility — shipping now for `glam run`.** Every run lands in a
+  local ledger you own (`~/.glam/usage.jsonl`); `glam usage` breaks spend down by
+  day/model/provider, with monthly budget warnings — offline, no key.
+- **Wrapping Claude Code itself — the direction, not shipped.** Feeding that store and
+  ledger live from your Claude Code sessions is where this goes; today nothing hooks
+  into Claude Code automatically.
+- **Teams — specified, in active build.** Shared team memories (scoped by design so
+  personal data never enters the shared store), team usage + billing across all
+  providers — subscriptions *and* pay‑as‑you‑go API — and audit logs: which
+  model/provider handled every task, what code changed, what commits, which projects.
+
+glamfire targets **long‑horizon tasks and teams** — work that outlasts one session,
+one subscription, and one model.
+
 ### Why now — the two advancements underneath
 
 glamfire defaults to **GLM 5.2 on Fireworks AI**, but neither is the point. They are
@@ -135,7 +165,7 @@ prerequisite. **Local‑first describes your data, not your GPUs.**
 |---|---|---|
 | **Claude Code** | the best frontier coding agent | Keep it for the hard edge. glamfire routes the routine center of your workload to open models at a third to a fiftieth of frontier list price (GLM 5.2 vs Sonnet ≈ ⅓; DeepSeek V4 Flash vs Opus ≈ 1/50), with frontier as an **earned escalation** — plus a **hard per‑run budget stop no frontier‑lab agent ships**, and a spend ledger that lives in a file you own. |
 | **opencode & other OSS agents** | configurable agent CLIs | There you (or your agent config) assign models to agents and switch by hand. glamfire decides **per task, automatically** — price × capability × calibrated confidence, with escalation the cheap model must fail to trigger — and family switching is conformance‑tested, not vibes. |
-| **Ollama / vLLM** | run open weights yourself | A model server is not a work system. glamfire is the loop + routing + ledger on top — today via serverless FP8 rentals of the same weights your laptop can't hold (a local/vLLM‑endpoint adapter is specified and in build). |
+| **Ollama / vLLM** | run open weights yourself | A model server is not a work system. glamfire is the loop + routing + ledger **on top of your server, today**: the `local` adapter drives any OpenAI‑compatible endpoint (Ollama, vLLM, SGLang, LM Studio, DwarfStar/DS4) at **$0/token**, live‑verified against a real Ollama daemon — with hosted models one routing rule away when the task outgrows your hardware. |
 | **OpenRouter** | one key, 400+ models, auto‑router | A hosted middleman: even its auto‑router picks a model **per prompt**, and every request — plus your spend metadata — transits their gateway. glamfire goes **direct to providers you choose**, routes whole tasks, and keeps the loop, context store, budgets, and ledger on your disk. |
 | **A single open model (Hermes, GLM, DeepSeek…)** | a frontier‑class brain, free | A brain in a jar. glamfire is the jar‑opener: the harness that turns raw weights into a working, budgeted, tool‑using agent — and lets you swap the brain later. |
 | **Goose** | model‑agnostic OSS agent (AAIF‑stewarded) | Closest cousin, honestly — it ships config‑driven multi‑model (lead/worker, planner/executor). glamfire's wedge: routing **each task** automatically by price × capability × confidence with earned escalation, an owned portable context layer **guaranteed by test**, and per‑model conformance gates. |
@@ -175,8 +205,9 @@ load‑bearing subsystems:
 
 - **router** — scores each task **center ↔ edge** of distribution and sends it to the
   cheapest capable model, escalating to the frontier only when confidence is low.
-- **adapters** — a **tested harness per model family** (GLM 5.2/Fireworks, Anthropic,
-  OpenAI, local vLLM). Each turns a raw model into a *working agent* — no brain in a jar.
+- **adapters** — a **tested harness per model family** (GLM 5.2/Fireworks, Together,
+  Anthropic, and any local OpenAI‑compatible server: Ollama, vLLM, LM Studio,
+  DwarfStar/DS4). Each turns a raw model into a *working agent* — no brain in a jar.
 - **team** — a self‑hosted team surface (Slack/Discord/HTTP). The open answer to renting
   your team's context to a lab: the knowledge stays in **your** store.
 - **surfaces** — the `glam` CLI, an SDK, and a server/daemon mode.
@@ -301,7 +332,9 @@ every release.)
   the live decision. Wired into the engine via a neutral `RouterHook`.
 - **`glam models`** — the **evergreen model/provider landscape** (SPEC §5.3/§5.4):
   a built‑in, dated catalog of top open‑weight models across respected US‑hosted
-  providers (Fireworks, Together, DeepInfra, Mistral) plus the Claude escalation tier,
+  providers (Fireworks, Together, DeepInfra, Mistral) plus the Claude escalation tier
+  and the **$0 self‑host venues** (Ollama/vLLM/LM Studio generic rows, DwarfStar‑DS4
+  with its beta/Q2/hardware‑floor caveats, Ornith‑1.0 9B/35B),
   with **USD/1M prices, served quantization (FP8 vs FP4 caveats recorded per
   provider×model), context windows, capability tokens, license, `asOf` verification
   date, and source URL on every entry**. Filter with `--capable`, sort cheapest‑first
@@ -363,16 +396,47 @@ every release.)
   fails loud): `glam run` warns when month‑to‑date spend crosses the threshold, and
   `glam usage` renders a budget bar. Alerting only — per‑run **hard** ceilings remain
   `[run.budget]`, enforced by the engine.
+- **`glam serve` — the router‑as‑proxy gateway, live‑verified with real Claude Code**
+  ([docs/PROXY.md](docs/PROXY.md)): a local endpoint speaking **both** the Anthropic
+  Messages and OpenAI chat‑completions dialects, so agents you already run (Claude
+  Code via `ANTHROPIC_BASE_URL`, opencode, Cursor, any SDK) execute on **GLM 5.2 on
+  Fireworks** (pinned, or `--route` for the cost‑aware router per request) with
+  glamfire's **exact first‑party meter, hard budget stops, and usage ledger under
+  them**. Faithful translation both ways: streaming SSE re‑framed
+  fragment‑for‑fragment, **tool‑call IDs round‑trip verbatim**, system prompts in
+  every observed form, image passthrough gated on target vision. **Hard**
+  `[serve.budgets]` stops (global + per‑client) reject over‑budget requests with a
+  clean provider‑shaped error **before any provider call**. Loopback + bearer token
+  always required; non‑loopback refuses to start without an explicit token.
+  **Observed live** (2026‑07‑03, Claude Code v2.1.200): headless `claude -p`
+  completed real multi‑turn tasks with real `Read`/`Write` tool calls through the
+  proxy on GLM‑5.2, and `glam usage` showed the exact metered spend by client —
+  $0.042 actual vs the $0.30 Claude Code estimated at Claude pricing.
+- **`glam launch claude` — one command, honest status line**: auto‑starts
+  `glam serve` on 127.0.0.1:4114 if it is not already running, sets the env block
+  that makes Claude Code's status line read **"GLM 5.2 (via glamfire)"** instead of
+  an Anthropic id (`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` + a non‑Anthropic
+  `ANTHROPIC_MODEL` + the documented `_CUSTOM_MODEL_OPTION_NAME`/`_OPTION_DESCRIPTION` vars),
+  execs `claude` with stdio inherited, and tears the gateway down on exit. Reuses a
+  running serve via `GLAM_SERVE_TOKEN`. **Observed live** (2026‑07‑03): `glam launch
+  claude -- -p "…"` reached GLM‑5.2 and the ledger recorded `requestedModel:
+  glm‑5.2`, `model: glm‑5p2`, real cost — the one‑command path, verified.
 - A passing **smoke test** that drives the real CLI the way a human would.
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 
 **Built, one step from DONE** (all gates green; the only unverified step is the live call)
-- **Three tested adapters, seven model configs** behind one conformance suite:
+- **Four tested adapters, eight model configs** behind one conformance suite:
   **`fireworks-glm`** serving **GLM 5.2** (FP8, the default workhorse), **DeepSeek‑V4‑Pro**
   (FP8, 1M ctx, $1.74/$3.48 — the open escalation tier), and **DeepSeek‑V4‑Flash** (FP8,
   1M ctx, $0.14/$0.28 — the cheapest capable long‑context model anywhere); **`anthropic`**
   (Claude Messages API — frontier escalation); and **`together`** serving **GLM 5.2**,
-  **Qwen3‑Coder‑Next**, *and* **DeepSeek‑V4‑Pro** — the OpenAI‑compatible ones share one
+  **Qwen3‑Coder‑Next**, *and* **DeepSeek‑V4‑Pro**; and **`local`** — ANY
+  OpenAI‑compatible self‑host server (Ollama, vLLM, SGLang, LM Studio, antirez's
+  DwarfStar/DS4) at **$0/token**, with user‑declared capabilities/context (the router's
+  capability floor), a `--local`/`localOnly` privacy mode that **fails loud** instead of
+  silently falling back to a hosted provider, and **live verification against a real
+  Ollama daemon** (qwen3:0.6b tool round‑trip through the real `glam run`; conformance
+  fixtures captured from the live wire). The OpenAI‑compatible adapters share one
   core (system shaping, native tool calling, SSE tool‑call fragment reassembly, per‑model
   pricing/capabilities). The same **conformance battery** runs against every adapter/model
   (a model is "supported" only when it's green). Honesty caveats: Together serves GLM‑5.2 at
@@ -401,6 +465,36 @@ every release.)
 
 If a capability is partial, the docs and this section say so. A feature is **DONE** only
 when a real human end‑user can use it.
+
+### Keep Claude Code, honestly
+
+One command puts you on GLM 5.2 with a status line that tells the truth:
+
+```bash
+glam launch claude
+```
+
+`glam launch claude` auto‑starts the glamfire gateway on 127.0.0.1:4114 (if it is not
+already running), sets the env block that points Claude Code at it **and** makes the
+status line read **"GLM 5.2 (via glamfire)"** instead of an Anthropic model id, then
+execs `claude` with stdio inherited. When claude exits, the gateway it started stops
+cleanly. Pass args through with `--`:
+
+```bash
+glam launch claude -- -p "explain this repo"
+glam launch claude -- --model foo   # anything after -- is claude's, verbatim
+```
+
+If you already run `glam serve` yourself, export its token and `glam launch claude`
+will reuse your server instead of starting one:
+
+```bash
+export GLAM_SERVE_TOKEN="<token `glam serve` printed>"
+glam launch claude
+```
+
+Every request lands in `~/.glam/usage.jsonl` with the honest id (`requestedModel:
+glm‑5.2`) and the real served model (`model: glm‑5p2`) — watch it with `glam usage`.
 
 ---
 

@@ -10,8 +10,15 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  createAnthropicAdapter,
+  createFireworksGlmAdapter,
+  resolveAnthropicConfig,
+  resolveFireworksConfig,
+} from '@glamfire/adapters';
 import { describe, expect, it } from 'vitest';
 import { detectInstall, isStandaloneBuild } from '../src/doctor.mjs';
+import { exitCodeForStatus, providerModelHeader } from '../src/run.mjs';
 import { suggest, useColor } from '../src/ui.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -109,6 +116,45 @@ describe('doctor.detectInstall — honest install check in every context', () =>
   });
 });
 
+describe('run.exitCodeForStatus — the documented, stable exit-code scheme (issue #23)', () => {
+  it('maps every run status to its documented code (0/1/3/130)', () => {
+    expect(exitCodeForStatus('done')).toBe(0);
+    expect(exitCodeForStatus('error')).toBe(1);
+    // Regression: a budget stop used to exit 0, indistinguishable from done.
+    expect(exitCodeForStatus('budget_exhausted')).toBe(3);
+    expect(exitCodeForStatus('interrupted')).toBe(130);
+  });
+});
+
+describe('run.providerModelHeader — provider + model family, never the adapter id (issue #24)', () => {
+  it('shows provider + DeepSeek family for a DeepSeek run through the shared Fireworks adapter', () => {
+    const model = 'accounts/fireworks/models/deepseek-v4-flash';
+    const config = resolveFireworksConfig({ FIREWORKS_API_KEY: 'test-key' }, { model });
+    const adapter = createFireworksGlmAdapter(config);
+    const line = providerModelHeader(adapter, model);
+    expect(line).toContain('provider: fireworks');
+    expect(line).toContain(`deepseek-v4-flash (${model})`);
+    // The regression itself: the shared adapter's internal id must not leak.
+    expect(line).not.toContain('fireworks-glm');
+  });
+
+  it('shows the GLM family for the default workhorse', () => {
+    const config = resolveFireworksConfig({ FIREWORKS_API_KEY: 'test-key' });
+    const adapter = createFireworksGlmAdapter(config);
+    const line = providerModelHeader(adapter, config.model);
+    expect(line).toContain('provider: fireworks');
+    expect(line).toContain(`glm-5.2 (${config.model})`);
+  });
+
+  it('shows a bare model id when the family equals the served id (anthropic)', () => {
+    const config = resolveAnthropicConfig({ ANTHROPIC_API_KEY: 'test-key' });
+    const adapter = createAnthropicAdapter(config);
+    const line = providerModelHeader(adapter, config.model);
+    expect(line).toContain('provider: anthropic');
+    expect(line).not.toContain('('); // no redundant "family (family)" parens
+  });
+});
+
 describe('real CLI — exit codes and error surfaces', () => {
   it('suggests the nearest command on a typo and exits 2', () => {
     const r = glam(['rout']);
@@ -147,6 +193,17 @@ describe('real CLI — exit codes and error surfaces', () => {
     expect(r.stdout).toContain('Get started');
     expect(r.stdout).toContain('glam doctor');
     expect(r.stdout).toContain('FIREWORKS_API_KEY');
+  });
+
+  it('documents the stable exit-code scheme in glam help and glam run --help (issue #23)', () => {
+    const help = glam(['help']);
+    expect(help.stdout).toContain('Exit codes');
+    expect(help.stdout).toContain('3 budget/step ceiling');
+    const runHelp = glam(['run', '--help']);
+    expect(runHelp.status).toBe(0);
+    expect(runHelp.stdout).toContain('Exit codes');
+    expect(runHelp.stdout).toMatch(/3\s+budget stop/);
+    expect(runHelp.stdout).toMatch(/130\s+interrupted/);
   });
 
   it('doctor prints a copy-paste fix for a missing key and exits 1', () => {

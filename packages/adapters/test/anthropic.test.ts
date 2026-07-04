@@ -364,3 +364,9 @@ describe('AnthropicAdapter.stream over real HTTP', () => {
     expect(events.some((e) => e.kind === 'tool_call_started')).toBe(true);
   });
 });
+
+describe('provider identity (issue #24)', () => {
+  it('declares provider "anthropic"', () => {
+    expect(createAnthropicAdapter(config).provider).toBe('anthropic');
+  });
+});

@@ -3,8 +3,8 @@
 **Keep the last mile of AI open, and in the hands of the people who do the work.**
 
 Intelligence became cheap. Within a single year, open models reached — and on the broad
-middle of everyday work, surpassed — the frontier, at a fraction of the cost, free to
-self‑host. That should have been a liberation. Instead it is becoming a new dependency.
+middle of everyday work, surpassed — the frontier, rentable by the token from
+serverless‑GPU clouds at a fraction of the cost. That should have been a liberation. Instead it is becoming a new dependency.
 
 The model was never the lock‑in. The **harness** is: the context a model is fed, the
 routing that picks it, the tool‑calls shaped to its grammar, the prompts tuned to its

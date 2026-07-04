@@ -244,6 +244,13 @@ function neutralToWire(messages: NeutralMessage[]): Record<string, unknown>[] {
 export interface OpenAICompatibleSpec {
   /** Stable adapter id (e.g. 'fireworks-glm', 'together'). */
   id: string;
+  /**
+   * Stable lowercase provider id (e.g. 'fireworks', 'together') — the company
+   * actually serving the model. Surfaced in the run header and usage records so
+   * a DeepSeek run through the shared adapter shows the provider, never the
+   * adapter's internal id (issue #24).
+   */
+  provider: string;
   /** Provider base URL, e.g. `https://api.together.xyz/v1`. */
   baseUrl: string;
   /** Resolved API key (Bearer). Never logged. */
@@ -296,10 +303,13 @@ export interface OpenAICompatibleSpec {
  */
 export class OpenAICompatibleAdapter implements StreamingAdapter {
   readonly id: string;
+  /** Stable lowercase provider id serving the model (e.g. 'fireworks'). */
+  readonly provider: string;
   readonly capabilities: Capabilities;
 
   constructor(protected readonly spec: OpenAICompatibleSpec) {
     this.id = spec.id;
+    this.provider = spec.provider;
     this.capabilities = spec.capabilities;
   }
 

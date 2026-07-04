@@ -12,11 +12,13 @@ import { fileURLToPath } from 'node:url';
 import {
   FIREWORKS_DEEPSEEK_FLASH_MODEL,
   FIREWORKS_DEEPSEEK_PRO_MODEL,
+  OLLAMA_DEFAULT_BASE_URL,
   TOGETHER_DEEPSEEK_MODEL,
   TOGETHER_GLM_MODEL,
   TOGETHER_QWEN_MODEL,
   createAnthropicAdapter,
   createFireworksGlmAdapter,
+  createLocalAdapter,
   createTogetherAdapter,
   parseAnthropicSSE,
   parseSSE,
@@ -24,6 +26,7 @@ import {
   reduceStream,
   resolveAnthropicConfig,
   resolveFireworksConfig,
+  resolveLocalConfig,
   resolveTogetherConfig,
 } from '@glamfire/adapters';
 import type { ProviderRequest, RunState, ToolSpec } from '@glamfire/engine';
@@ -410,6 +413,56 @@ runConformance(() => {
     expectStreamText: { textIncludes: 'equals 20', finishReason: 'stop' },
   };
 }, 'DeepSeek-V4-Pro');
+
+// --- local / Ollama qwen3:0.6b ($0 self-host): LIVE-captured wire fixtures ----
+// Every fixture below is a real Ollama daemon capture (2026-07-03, temperature
+// 0, seed 42, qwen3:0.6b — the smallest real tool-calling model) recorded
+// through the local adapter's own encodeRequest by
+// scripts/capture-local-fixtures.mjs. The identical OpenAI-compatible wire
+// contract covers vLLM / SGLang / LM Studio / DwarfStar-DS4 (issue #25,
+// research/26 §6, research/27 §3). NOTE: the single-tool fixture uses
+// get_weather — a 0.6B model at temperature 0 does arithmetic in its head, but
+// it can only answer a weather question by REALLY calling the tool.
+runConformance(() => {
+  const config = resolveLocalConfig({
+    GLAM_LOCAL_BASE_URL: OLLAMA_DEFAULT_BASE_URL,
+    GLAM_LOCAL_MODEL: 'qwen3:0.6b',
+  });
+  return {
+    adapter: createLocalAdapter(config),
+    sampleState: sampleState(config.model),
+    inspectRequest: inspectFireworksRequest,
+    toolCallCompletion: {
+      raw: json('ollama-completion-toolcall.json'),
+      text: '',
+      toolCalls: [{ id: 'call_dz7ldni8', name: 'get_weather', arguments: { city: 'Paris' } }],
+      finishReason: 'tool_calls',
+      usage: { inputTokens: 163, cachedInputTokens: 0, outputTokens: 88 },
+    },
+    multiToolCompletion: {
+      raw: json('ollama-completion-multitool.json'),
+      text: '',
+      toolCalls: [
+        { id: 'call_xveoo7pi', name: 'get_weather', arguments: { city: 'Paris' } },
+        { id: 'call_el37c883', name: 'get_weather', arguments: { city: 'London' } },
+      ],
+      finishReason: 'tool_calls',
+      usage: { inputTokens: 172, cachedInputTokens: 0, outputTokens: 259 },
+    },
+    jsonCompletion: {
+      raw: json('ollama-completion-json.json'),
+      expectJson: { answer: 20, unit: 'none' },
+    },
+    reduceToolCallStream: () => reduceStream(parseSSE(fixture('ollama-stream-toolcall.sse.txt'))),
+    reduceTextStream: () => reduceStream(parseSSE(fixture('ollama-stream-text.sse.txt'))),
+    expectStreamToolCall: {
+      name: 'get_weather',
+      arguments: { city: 'Paris' },
+      finishReason: 'tool_calls',
+    },
+    expectStreamText: { textIncludes: 'equals 20', finishReason: 'stop' },
+  };
+}, 'Ollama qwen3:0.6b · self-host $0');
 
 runConformance(() => {
   const config = resolveAnthropicConfig({ ANTHROPIC_API_KEY: 'test-key' });

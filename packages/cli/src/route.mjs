@@ -26,12 +26,14 @@ Needs no API key — nothing is sent to any provider.
 Options:
   --file <path>          Add a file's contents as task input (repeatable)
   --output-tokens <n>    Assumed completion length for cost projection (default 600)
+  --local                Restrict routing to self-host models from
+                         providers.local ($0/token; fails loud when none fits)
   --json                 Print the structured decision + report as JSON
   -h, --help             Show this help
 `;
 
 function parseArgs(args) {
-  const opts = { files: [], json: false };
+  const opts = { files: [], json: false, local: false };
   const positional = [];
   for (let i = 0; i < args.length; i += 1) {
     const a = args[i];
@@ -56,6 +58,9 @@ function parseArgs(args) {
         opts.outputTokens = n;
         break;
       }
+      case '--local':
+        opts.local = true;
+        break;
       case '--json':
         opts.json = true;
         break;
@@ -139,6 +144,7 @@ export async function cmdRoute(argv, { version }) {
         history: historyContext,
       };
     }
+    if (opts.local) routerOpts.localOnly = true;
     router = buildRouter(loaded.config, registry, routerOpts);
     // select() resolves the decision AND records it in the distribution report.
     router.select(task);

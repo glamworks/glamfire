@@ -1,0 +1,34 @@
+{
+  "id": "chatcmpl-134",
+  "object": "chat.completion",
+  "created": 1783111488,
+  "model": "qwen3:0.6b",
+  "system_fingerprint": "fp_ollama",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "",
+        "reasoning": "Okay, the user is asking for the current weather in Paris using the get_weather tool. Let me check the available functions. The tool provided is get_weather, which requires a city parameter. The user specified Paris, so I need to call get_weather with city set to Paris. I'll format the tool call accordingly.\n",
+        "tool_calls": [
+          {
+            "id": "call_dz7ldni8",
+            "index": 0,
+            "type": "function",
+            "function": {
+              "name": "get_weather",
+              "arguments": "{\"city\":\"Paris\"}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 163,
+    "completion_tokens": 88,
+    "total_tokens": 251
+  }
+}

@@ -14,6 +14,7 @@ import {
   createFireworksGlmAdapter,
   createTogetherAdapter,
   diffCatalogs,
+  isSelfHostProvider,
   mergeCatalogs,
   resolveAnthropicConfig,
   resolveFireworksConfig,
@@ -44,14 +45,52 @@ describe('built-in catalog schema (honesty rules)', () => {
     }
   });
 
-  it('prices are positive when published, null (never 0 / never guessed) otherwise', () => {
+  it('hosted prices are positive when published, null otherwise; self-host is exactly $0', () => {
     for (const entry of BUILTIN_CATALOG) {
+      if (isSelfHostProvider(entry.provider)) {
+        // $0 is the REAL marginal token price of owned hardware — and it must
+        // be exactly 0, never a positive number glamfire invented.
+        expect(entry.usdPerMInput).toBe(0);
+        expect(entry.usdPerMOutput).toBe(0);
+        continue;
+      }
       for (const price of [entry.usdPerMInput, entry.usdPerMOutput]) {
         if (price !== null) expect(price).toBeGreaterThan(0);
       }
       // input and output are published together or not at all.
       expect(entry.usdPerMInput === null).toBe(entry.usdPerMOutput === null);
     }
+  });
+
+  it('rejects a hosted entry claiming $0 (schema-level honesty guard)', () => {
+    const fireworksGlm = catalogEntry('fireworks', GLM_DEFAULT_MODEL);
+    expect(() =>
+      validateCatalogEntry({ ...fireworksGlm, usdPerMInput: 0, usdPerMCachedInput: 0 }),
+    ).toThrow(/cannot publish \$0/);
+  });
+
+  it('lists the self-host tier: ollama/vllm/lmstudio venues, DwarfStar-DS4, Ornith sizes', () => {
+    expect(catalogEntry('ollama', 'http://localhost:11434/v1')).toBeDefined();
+    expect(catalogEntry('vllm', 'http://localhost:8000/v1')).toBeDefined();
+    expect(catalogEntry('lmstudio', 'http://localhost:1234/v1')).toBeDefined();
+
+    const ds4 = catalogEntry('dwarfstar', 'http://127.0.0.1:8000/v1');
+    expect(ds4).toBeDefined();
+    expect(ds4?.model).toBe('deepseek-v4-flash'); // same brain as the hosted budget tier
+    expect(ds4?.contextK).toBe(100); // practical cap, not the 1M hosted window
+    expect(ds4?.notes).toMatch(/BETA/);
+    expect(ds4?.notes).toMatch(/NOT independently verified/);
+    expect(ds4?.notes).toMatch(/96–128 GB/);
+
+    for (const size of ['9B', '35B']) {
+      const ornith = catalogEntry('vllm', `deepreinforce-ai/Ornith-1.0-${size}`);
+      expect(ornith).toBeDefined();
+      expect(ornith?.license).toBe('MIT');
+      expect(ornith?.notes).toMatch(/[Vv]endor-benchmarked ONLY/);
+    }
+    // Deliberately absent: 397B (8×80GB is not a user path) and 31B (no checkpoint).
+    expect(BUILTIN_CATALOG.some((e) => e.endpoint.includes('Ornith-1.0-397B'))).toBe(false);
+    expect(BUILTIN_CATALOG.some((e) => e.endpoint.includes('Ornith-1.0-31B'))).toBe(false);
   });
 
   it('covers the landscape the seed requires (workhorse, second tier, escalation)', () => {

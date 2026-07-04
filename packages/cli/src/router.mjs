@@ -6,9 +6,11 @@
 import {
   createAnthropicAdapter,
   createFireworksGlmAdapter,
+  createLocalAdapter,
   createTogetherAdapter,
   resolveAnthropicConfig,
   resolveFireworksConfig,
+  resolveLocalConfig,
   resolveTogetherConfig,
 } from '@glamfire/adapters';
 import { ModelRegistry, Router, descriptorFromAdapter } from '@glamfire/router';
@@ -102,7 +104,29 @@ export function buildModelRegistry(glamConfig, env, { allowDryRunKey = false } =
     registry.add(descriptorFromAdapter(adapter, runtimeConfig));
   }
 
+  // Local / self-host — ANY OpenAI-compatible server the user runs (Ollama,
+  // vLLM, SGLang, LM Studio, DwarfStar/DS4). Explicit opt-in only: models the
+  // user lists under `providers.local.models` are registered with the
+  // USER-DECLARED capabilities/context/price from the same config slice —
+  // glamfire never guesses what a self-hosted server serves, and a local model
+  // never joins routing unlisted (the anti-silent-quality-cliff floor). No API
+  // key is required, so this works identically on the live and dry-run paths.
+  const localModels = new Set(glamConfig.providers.local.models);
+  for (const modelId of localModels) {
+    const localConfig = resolveLocalConfig(env, { model: modelId }, { config: glamConfig });
+    const adapter = createLocalAdapter(localConfig);
+    const runtimeConfig = { model: modelId, temperature: localConfig.temperature };
+    if (localConfig.maxTokens !== undefined) runtimeConfig.maxTokens = localConfig.maxTokens;
+    if (localConfig.seed !== undefined) runtimeConfig.seed = localConfig.seed;
+    registry.add(descriptorFromAdapter(adapter, runtimeConfig));
+  }
+
   return registry;
+}
+
+/** Is this model id served by the local (self-host) provider per the config? */
+export function isLocalModel(glamConfig, modelId) {
+  return glamConfig.providers.local.models.includes(modelId);
 }
 
 /** Construct a Router over the resolved routing policy + a model registry. */

@@ -72,8 +72,11 @@ describe('sortEntries --sort price', () => {
     expect(published).toEqual([...published].sort((a, b) => a - b));
     // nulls (mistral, unpublished) sink to the end
     expect(prices.at(-1)).toBeNull();
-    // the cheapest published model today is deepseek-v4-flash ($0.14+$0.28)
-    expect(sorted[0].model).toBe('deepseek-v4-flash');
+    // self-host venues ($0 marginal price on owned hardware) sort first
+    expect(blendedPrice(sorted[0])).toBe(0);
+    // the cheapest PAID hosted model today is deepseek-v4-flash ($0.14+$0.28)
+    const firstPaid = sorted.find((e) => (blendedPrice(e) ?? 0) > 0);
+    expect(firstPaid.model).toBe('deepseek-v4-flash');
   });
 
   it('no sort mode preserves catalog order', () => {
