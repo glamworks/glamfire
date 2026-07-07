@@ -5,7 +5,7 @@
 
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { Brain } from '@glamfire/brain';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -49,16 +49,21 @@ describe('brainStorePath (project-scoped by default)', () => {
   });
 
   it('honors a [memory] store override (relative to cwd, absolute kept)', () => {
+    // Use platform-absolute paths so the assertion holds on Windows too:
+    // `path.resolve` (used by brainStorePath) treats a bare `/w` as drive-relative
+    // on win32 and prepends the current drive, which would break a naive join.
+    const cwdAbs = resolve(tmpdir(), 'w');
+    const storeAbs = resolve(tmpdir(), 'abs', 'team.brain');
     expect(
       brainStorePath({
         memory: { store: 'shared/team.brain' },
         projectConfigPath: null,
-        cwd: '/w',
+        cwd: cwdAbs,
       }),
-    ).toBe(join('/w', 'shared', 'team.brain'));
+    ).toBe(join(cwdAbs, 'shared', 'team.brain'));
     expect(
-      brainStorePath({ memory: { store: '/abs/team.brain' }, projectConfigPath: null, cwd: '/w' }),
-    ).toBe('/abs/team.brain');
+      brainStorePath({ memory: { store: storeAbs }, projectConfigPath: null, cwd: cwdAbs }),
+    ).toBe(storeAbs);
   });
 });
 
