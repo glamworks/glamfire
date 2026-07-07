@@ -121,6 +121,16 @@ Everything important is written down so a fresh session is fully equipped:
 If you learn something a future session would need and it is not derivable from the
 repo, **write it down** before you stop.
 
+**This is evergreen, not "when convenient."** Knowledge persistence + commit/tag/
+version-bump/push is a standing, always-on discipline (owner directive, 2026‑07‑07):
+every non‑trivial learning is written to `.claude/memory/` + `research/` + README
+Current reality + `state.md` **as it happens**, operational knowledge is encoded as
+runnable `scripts/`, and every release‑worthy merge is bumped → committed → pushed →
+tagged (`vX.Y.Z`) → tags pushed (fires the release workflow) — no uncommitted
+knowledge sits. Future fresh sessions / context windows must kick off with all the
+knowledge and capabilities the current session has. Treat this with the same weight
+as the gates, on every unit of work.
+
 ## 11. Focus
 
 - **Models:** GLM 5.2 + Fireworks AI first. Other adapters exist for escalation and
