@@ -23,7 +23,16 @@
 
 The nominal use case: **use Claude Code exactly as you do now — but on GLM 5.2
 running on‑demand on Fireworks AI, with glamfire's memory, knowledge, and
-billing wrapped around it, in files you own.** One command:
+billing wrapped around it, in files you own.**
+
+First, install glamfire (see **[Install](#install)** for npm, Homebrew, Scoop, and
+winget). The nominal method, if you have Node ≥ 22:
+
+```bash
+npm install -g glamfire
+```
+
+Then one command runs Claude Code on GLM 5.2:
 
 ```bash
 glam launch claude
