@@ -254,3 +254,38 @@ Claude Code memory (9 files, idempotent re-runs). Owner now develops glamfire
 WITH glamfire (GLM 5.2/Fireworks). Outstanding: feat/local-adapter worktree
 (builder in flight, #25) — integrate on arrival. Research briefs 27–32 landed;
 issues #29–49 file the full directive backlog.
+
+## 2026-07-07 — glam init + AGENTS.md ingestion shipped (#42, PR #50)
+
+Issue #42 DONE on `feat/init-instructions-42` (PR #50, open, gates green):
+- `glam init` scaffolds starter AGENTS.md (idempotent; `--force`→`.bak`).
+- `glam run` ingests project instructions — AGENTS.md preferred, CLAUDE.md
+  fallback, upward search — into every run's context; honest `instructions:`
+  line on every run. `composeSystem` now takes a blocks array.
+- README rewritten: `glam launch claude` is the nominal use case up top
+  (keep Claude Code, run on GLM 5.2/Fireworks, switch to/from Anthropic
+  subscription on demand, memory+billing in files you own). Full dogfooding
+  emphasis (built with glam+GLM+Fireworks wrapping Claude Code after Opus
+  bootstrap; recommend users develop glamfire with glam). `~/.config/.env`
+  not auto-loaded (source it). Not locked into one model/provider/harness.
+- Smoke: +2 checks (init idempotent/force; ingestion AGENTS/CLAUDE/absent),
+  55 total. Lint clean, 494 tests, smoke PASS. Human-verified vs real GLM 5.2.
+
+**NEXT SESSION — public-release push.** Owner will announce glamfire in a
+comment on a Nate B Jones video; must be ready for users + contributors.
+Outstanding work the owner has directed (do NOT all land in one PR; file
+issues, prioritize, build in lock-step):
+1. **Background agents in Claude Code TUI** — git worktrees, feature branches,
+   an interactive orchestrator that owns the final results + owns main.
+   Background workers wrapping claude code with glam MUST use the SAME model
+   as the interactive main orchestrator session.
+2. **First-launch memory capture** — running `glam launch claude` the first
+   time on a project developed with normal Claude Code must pull all existing
+   memories into glam, while keeping the interactive session launch FAST.
+3. **Status line "model · project · context"** — use this status line when
+   wrapping with glam; if a user uses glam, update the status line to it.
+4. **Ready to develop projects OTHER than glamfire** — generalize the dogfood
+   loop; glamfire must drive any repo, not just its own.
+5. **Public release readiness** — install paths live, docs honest, issues
+   triaged, good-first-issues inviting, CONTRIBUTING/RFC clear, gates green
+   on all 3 OSes. Cut a release (bump→commit→push→tag) once ready.

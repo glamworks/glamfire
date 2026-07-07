@@ -104,3 +104,31 @@ them the hard way.
   price to $0) and then requires EVERY usage to be exactly $0. (7) DS4 byte-exact
   tool-call ID replay is a shared battery item now — never normalize/rewrite tool_call
   IDs when replaying history (also protects Fireworks prompt caching).
+
+## 2026-07-07 — init/ingestion + launch-switching + env-loading (issue #42)
+
+- **`glam launch claude` hardcodes `glm-5.2`** (MODEL_ID const in launch.mjs). To
+  run a different model/provider, or let the router pick, start `glam serve`
+  yourself (`--model <id>` or `--route`), export `GLAM_SERVE_TOKEN`, then
+  `glam launch claude` reuses your server. The one-command path is GLM-only by
+  design; switching = own serve + token.
+- **glamfire reads `process.env` only — it does NOT auto-load `~/.config/.env`.**
+  Keys (FIREWORKS_API_KEY, GLAM_SERVE_TOKEN, etc.) must be in the shell env.
+  If kept in `~/.config/.env`: `set -a; . ~/.config/.env; set +a` first. Never
+  silently import that file — secrets stay under shell control.
+- **`glam run` config has NO `defaultProvider` key.** Provider is picked by the
+  router / Fireworks default. Setting `defaultProvider = "fireworks"` → config
+  validation fails loud (`Unrecognized key`). Minimal fireworks glam.toml =
+  `[providers.fireworks]` with baseUrl + `credential = { env = "..." }` + models.
+- **Smoke pattern for "prints a line then exits non-zero":** `execFileSync`
+  THROWS on non-zero exit. To assert output printed before the error (e.g. the
+  `instructions:` line prints before a bogus-key engine error), wrap in
+  try/catch and read `err.stdout ?? ''`. Don't assume exit 0.
+- **`glam init` is idempotent + safe:** refuses to clobber an existing
+  AGENTS.md (exit 0, "exists" message); `--force` renames old → `AGENTS.md.bak`
+  first, then writes. CLAUDE.md is never touched by init — it's the read-only
+  fallback `glam run` reads when no AGENTS.md exists.
+- **Instructions ingestion preference:** AGENTS.md preferred at EVERY depth
+  over CLAUDE.md (a nearer CLAUDE.md loses to a farther AGENTS.md). Empty
+  instruction file = keep looking, not "found empty." Absent = honest `none`
+  line, never an error.
