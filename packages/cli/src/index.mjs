@@ -26,6 +26,7 @@ const COMMANDS = [
   'route',
   'serve',
   'launch',
+  'init',
   'usage',
   'models',
   'brain',
@@ -47,6 +48,8 @@ Commands:
                      with glamfire's meter, router, budget stops, and ledger under it
   launch <integration>  Launch an agent on GLM 5.2 via glam serve (claude):
                      auto-starts the gateway, sets an honest status line, execs the agent
+  init               Scaffold a starter AGENTS.md at the project root (glam run
+                     reads AGENTS.md — CLAUDE.md as fallback — into every run)
   usage              Show spend/token usage from the local ledger (offline)
   models             Show the model/provider landscape: prices, quant, context
                      (--refresh pulls current prices from provider APIs)
@@ -111,6 +114,10 @@ async function main(argv) {
   if (first === 'launch') {
     const { cmdLaunch } = await import('./launch.mjs');
     return cmdLaunch(args.slice(1), { version: VERSION });
+  }
+  if (first === 'init') {
+    const { cmdInit } = await import('./init.mjs');
+    return cmdInit(args.slice(1), { version: VERSION });
   }
   if (first === 'usage') {
     const { cmdUsage } = await import('./usage.mjs');

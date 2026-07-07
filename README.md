@@ -19,6 +19,94 @@
 
 ---
 
+## Start here: keep Claude Code, run it on GLM 5.2
+
+The nominal use case: **use Claude Code exactly as you do now — but on GLM 5.2
+running on‑demand on Fireworks AI, with glamfire's memory, knowledge, and
+billing wrapped around it, in files you own.** One command:
+
+```bash
+glam launch claude
+```
+
+That auto‑starts the glamfire gateway on `127.0.0.1:4114`, points Claude Code
+at it, sets an **honest status line** that reads **"GLM 5.2 (via glamfire)"**
+instead of an Anthropic model id, and execs `claude` with stdio inherited. When
+claude exits, the gateway it started stops cleanly. Pass args through with `--`:
+
+```bash
+glam launch claude -- -p "explain this repo"
+glam launch claude -- --model foo   # anything after -- is claude's, verbatim
+```
+
+**Switch between your Anthropic subscription (Claude models) and GLM 5.2 on
+Fireworks, on demand.** `glam launch claude` pins GLM 5.2 for the one‑command
+path. To run a different model or provider — or let the cost‑aware router pick
+per request — start the gateway yourself and let `glam launch claude` reuse it:
+
+```bash
+# Pin any model glamfire knows (GLM 5.2, DeepSeek V4 Pro/Flash, Qwen3‑Coder, …)
+glam serve --model accounts/fireworks/models/deepseek-v4-pro &
+export GLAM_SERVE_TOKEN="<token glam serve printed>"
+glam launch claude
+
+# Or let the router pick the cheapest capable model per request
+glam serve --route &
+export GLAM_SERVE_TOKEN="<token glam serve printed>"
+glam launch claude
+```
+
+Bring an `ANTHROPIC_API_KEY` and the frontier Claude models become an
+**escalation candidate** the router reaches for only when the cheap model can't
+hold the task — the frontier earns its tokens. Switch back to your Anthropic
+subscription any time: just run `claude` without `glam launch`. Your memory and
+knowledge already live in glamfire — no export ceremony, no lock‑in cliff.
+
+**Not locked into one model, one provider, or one harness.** Today the
+workhorse is GLM 5.2 on Fireworks AI; the adapters also cover Together, the
+Anthropic frontier tier, and any local OpenAI‑compatible server (Ollama, vLLM,
+LM Studio) at $0/token — and the spec calls for the full open‑weight landscape
+as it ships. Today the wrapped harness is Claude Code; `glam launch` is built
+to wrap **opencode, Cursor, codex, Hermes, and any agent that speaks the
+Anthropic or OpenAI wire** (via `glam serve`, which speaks both dialects). The
+harness is the product; models and agents are swappable parts.
+
+### What you get around Claude Code
+
+1. **Use Claude Code as your harness** — the best frontier coding agent, now
+   drivable on open weights.
+2. **Switch between Anthropic subscription (Claude) and GLM 5.2 on Fireworks
+   on demand** — one command each way, no rebuild.
+3. **Memory captured automatically, in real time** — every run recalls from
+   and writes back to a local, owned brain store (`~/.glam/brain.db`); nothing
+   is handed to a lab.
+4. **Team memory and a shared knowledge base** — the brain is exportable,
+   portable, human‑readable JSONL, bit‑exact round‑tripped (tested). Team
+   sharing is specified and in active build (see [Current reality](#current-reality)).
+5. **Honest billing and a hard budget stop** — every request lands in
+   `~/.glam/usage.jsonl`; `glam usage` breaks spend down by day/model/provider;
+   `--max-usd` is a ceiling that genuinely stops a run mid‑task.
+6. **Project ground truth, automatic** — `glam run` reads `AGENTS.md` (falling
+   back to `CLAUDE.md`) into every run's context; `glam init` scaffolds one.
+
+### We build glamfire with glamfire
+
+After an initial bootstrap with Claude Opus, glamfire development **fully
+switched to glamfire itself**: `glam run` + GLM 5.2 + Fireworks, wrapping
+Claude Code. The dogfood loop is **proven live** — glamfire has authored real
+docs and closed real issues end‑to‑end, driven by GLM 5.2, with a human review
+as the gate (see [docs/DOGFOODING.md](docs/DOGFOODING.md)). **We recommend you
+use glam to develop glamfire too** — and any other project. The harness is
+ready to drive real work, including yours.
+
+> Set your keys once. glamfire reads them from the environment (e.g.
+> `FIREWORKS_API_KEY`, `GLAM_SERVE_TOKEN`). If you keep keys in
+> `~/.config/.env`, source it first: `set -a; . ~/.config/.env; set +a`.
+> glamfire never auto‑loads that file — your secrets stay under your shell's
+> control, never silently imported.
+
+---
+
 ## The intelligence wars are over. The context wars have begun.
 
 Intelligence got roughly **98% cheaper**. Open models like **GLM 5.2** don't just keep
@@ -107,15 +195,12 @@ The difference is everything wrapped around that loop:
 
 ### First and foremost: Claude Code users and teams
 
-**You do not need to leave Claude Code — or your Anthropic subscription.** Use Claude
-Code exactly as you do now — with Claude, with GLM 5.2 on Fireworks AI, or with another
-model — and glamfire's job is to put **memory, knowledge, and usage‑and‑billing
-visibility around it**, in files you own. And the door swings both ways: walk away
-from Claude Code any time in the future, and your memories and knowledge are already
-up to date in glamfire — no export ceremony, no lock‑in cliff.
+The [Start here](#start-here-keep-claude-code-run-it-on-glm-52) section above is the
+nominal path: keep Claude Code, run it on GLM 5.2, own your memory and billing. The
+door swings both ways — walk away from Claude Code any time and your memories and
+knowledge are already up to date in glamfire, no export ceremony, no lock‑in cliff.
 
-That is the destination. Here is where each piece stands today — nothing below claims
-to work before it does:
+Here is where each piece stands today — nothing below claims to work before it does:
 
 - **The owned memory/knowledge store — shipping now.** `@glamfire/brain` works
   end‑to‑end: local SQLite + vectors on your disk, hybrid retrieval, and a tested
@@ -124,9 +209,12 @@ to work before it does:
 - **Usage & billing visibility — shipping now for `glam run`.** Every run lands in a
   local ledger you own (`~/.glam/usage.jsonl`); `glam usage` breaks spend down by
   day/model/provider, with monthly budget warnings — offline, no key.
-- **Wrapping Claude Code itself — the direction, not shipped.** Feeding that store and
-  ledger live from your Claude Code sessions is where this goes; today nothing hooks
-  into Claude Code automatically.
+- **Wrapping Claude Code itself — shipping now.** `glam launch claude` puts Claude
+  Code on GLM 5.2 with an honest status line, and `glam serve` is the router‑as‑proxy
+  gateway that any Anthropic‑ or OpenAI‑speaking agent can sit behind. Every request
+  through it lands in the owned ledger with the real meter and hard budget stops under
+  it. (Live capture of Claude Code sessions into the brain store automatically, in real
+  time, is the next step — see [Current reality](#current-reality).)
 - **Teams — specified, in active build.** Shared team memories (scoped by design so
   personal data never enters the shared store), team usage + billing across all
   providers — subscriptions *and* pay‑as‑you‑go API — and audit logs: which
@@ -172,17 +260,18 @@ prerequisite. **Local‑first describes your data, not your GPUs.**
 
 ### Five things to do with it this week
 
-1. **Halve your coding‑agent bill without firing Claude.** Send the routine work —
+1. **Put Claude Code on GLM 5.2.** `glam launch claude` — one command, honest
+   status line, memory and billing wrapped around it. Switch back to your
+   Anthropic subscription any time by running `claude` without `glam launch`.
+2. **Halve your coding‑agent bill without firing Claude.** Send the routine work —
    changelogs, dep bumps, repo explanations, first‑pass docs — through `glam run` at open‑model
    prices; keep your frontier subscription for the tasks that deserve it. The ledger shows
    what you actually saved.
-2. **Put a real ceiling on an agent.** `glam run "…" --max-usd 0.10` stops mid‑run when
+3. **Put a real ceiling on an agent.** `glam run "…" --max-usd 0.10` stops mid‑run when
    the meter hits the cap — not a warning, a stop. Ctrl‑C aborts the in‑flight request and
    prints the honest partial cost.
-3. **Meter a team.** Every run is a line in `~/.glam/usage.jsonl`. `glam usage` breaks
+4. **Meter a team.** Every run is a line in `~/.glam/usage.jsonl`. `glam usage` breaks
    spend down by day/model/provider; set `[usage] monthlyBudgetUsd` and get warned at 80%.
-4. **Read the market in one command.** `glam models --sort price` — the current open‑weight
-   landscape with real prices and dates; `--refresh` diffs live provider prices and flags drops.
 5. **Fire‑drill your continuity.** Add a routing rule that prefers DeepSeek V4 (wired and
    live‑verified today; Kimi is in the catalog with its adapter pending), and prove to
    yourself the same task completes when your primary provider is down. 2026 already
@@ -421,6 +510,15 @@ every release.)
   running serve via `GLAM_SERVE_TOKEN`. **Observed live** (2026‑07‑03): `glam launch
   claude -- -p "…"` reached GLM‑5.2 and the ledger recorded `requestedModel:
   glm‑5.2`, `model: glm‑5p2`, real cost — the one‑command path, verified.
+- **`glam init` + project‑instructions ingestion (issue #42, SPEC §5.2)** —
+  `glam init` scaffolds a starter `AGENTS.md` at the project root (idempotent:
+  refuses to clobber; `--force` backs up to `AGENTS.md.bak` first). `glam run`
+  reads the project's standing instructions — **`AGENTS.md` preferred,
+  `CLAUDE.md` as fallback**, searched upward from the cwd — into every run's
+  context, and prints an honest `instructions:` line on every run (which file,
+  from where — or `none` when absent). Read‑only: glamfire never modifies your
+  contract. **Observed live**: AGENTS‑preferred, CLAUDE‑fallback, and absent
+  states all verified end‑to‑end against real GLM 5.2, plus smoke coverage.
 - A passing **smoke test** that drives the real CLI the way a human would.
 - A complete **[SPEC.md](SPEC.md)** and **22‑dimension research base** in [`research/`](research/).
 
@@ -468,25 +566,12 @@ when a real human end‑user can use it.
 
 ### Keep Claude Code, honestly
 
-One command puts you on GLM 5.2 with a status line that tells the truth:
+The one‑command path is `glam launch claude` (see [Start here](#start-here-keep-claude-code-run-it-on-glm-52)).
+Two details worth keeping close:
 
-```bash
-glam launch claude
-```
-
-`glam launch claude` auto‑starts the glamfire gateway on 127.0.0.1:4114 (if it is not
-already running), sets the env block that points Claude Code at it **and** makes the
-status line read **"GLM 5.2 (via glamfire)"** instead of an Anthropic model id, then
-execs `claude` with stdio inherited. When claude exits, the gateway it started stops
-cleanly. Pass args through with `--`:
-
-```bash
-glam launch claude -- -p "explain this repo"
-glam launch claude -- --model foo   # anything after -- is claude's, verbatim
-```
-
-If you already run `glam serve` yourself, export its token and `glam launch claude`
-will reuse your server instead of starting one:
+If you already run `glam serve` yourself — to pin a different model (`--model <id>`),
+let the router pick (`--route`), or share one gateway across agents — export its token
+and `glam launch claude` reuses your server instead of starting one:
 
 ```bash
 export GLAM_SERVE_TOKEN="<token `glam serve` printed>"
