@@ -1115,7 +1115,34 @@ function startServe({ home, cwd, env, args = [] }) {
       if (m && !done) {
         done = true;
         clearTimeout(timer);
-        resolvePromise({ child, url: m[1], output: () => out });
+        // stop(): kill the server AND await its exit before resolving. On Windows
+        // a bare kill('SIGKILL') returns before the OS releases the child's file
+        // handles (sqlite WAL, temp files), so an immediate rmSync on the serve
+        // cwd hits EBUSY. Awaiting 'exit' (with a hard timeout) closes the race.
+        const stop = () =>
+          new Promise((res) => {
+            if (child.exitCode !== null || child.signalCode) return res();
+            const exitTimer = setTimeout(() => {
+              child.removeAllListeners('exit');
+              try {
+                child.kill('SIGKILL');
+              } catch {
+                /* already gone */
+              }
+              res();
+            }, 5000);
+            child.once('exit', () => {
+              clearTimeout(exitTimer);
+              res();
+            });
+            try {
+              child.kill('SIGKILL');
+            } catch {
+              clearTimeout(exitTimer);
+              res();
+            }
+          });
+        resolvePromise({ child, url: m[1], output: () => out, stop });
       }
     });
     child.stderr.on('data', (chunk) => {
@@ -1209,7 +1236,7 @@ await checkAsync(
         throw new Error('budget stop must state no provider call happened');
       }
     } finally {
-      started.child.kill('SIGKILL');
+      await started.stop();
       rmSync(dir, { recursive: true, force: true });
     }
   },
@@ -1304,7 +1331,7 @@ if (process.env.FIREWORKS_API_KEY) {
           throw new Error('live request metered without real usage');
         }
       } finally {
-        started.child.kill('SIGKILL');
+        await started.stop();
         rmSync(dir, { recursive: true, force: true });
       }
     },
