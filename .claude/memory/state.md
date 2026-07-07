@@ -276,9 +276,14 @@ comment on a Nate B Jones video; must be ready for users + contributors.
 Outstanding work the owner has directed (do NOT all land in one PR; file
 issues, prioritize, build in lock-step):
 1. **Background agents in Claude Code TUI** — git worktrees, feature branches,
-   an interactive orchestrator that owns the final results + owns main.
-   Background workers wrapping claude code with glam MUST use the SAME model
-   as the interactive main orchestrator session.
+   an interactive orchestrator that owns the final results + owns main. Model
+   is configurable per role, BOTH directions: cheap main (GLM/Fireworks) with
+   same-model workers, OR frontier main (Anthropic subscription + Claude) with
+   cheap workers (GLM/Fireworks or any model/provider/harness). Whichever
+   direction, the workers' memory + knowledge base MUST be the same store the
+   main session uses, available across ANY way glam is run in the future
+   (glam run / launch claude / serve+any agent / SDK) — one owned brain, not
+   per-mode silos.
 2. **First-launch memory capture** — running `glam launch claude` the first
    time on a project developed with normal Claude Code must pull all existing
    memories into glam, while keeping the interactive session launch FAST.

@@ -34,14 +34,27 @@ inline during the last session.
 > implement). No shims, no mocks, full-stack mini-features, verified as a human
 > end-user. Do NOT try to land all of these in one PR.**
 >
-> 1. **Background agents in the Claude Code TUI.** Support background agents,
->    git worktrees, and feature branches — an interactive orchestrator that
->    owns the final results and owns the main branch. **Critical constraint:**
->    background workers wrapping Claude Code with glam MUST use the SAME model
->    as the interactive main orchestrator session (no model drift between main
->    and workers). Think about how `glam launch claude`'s pinned model +
->    `GLAM_SERVE_TOKEN` reuse gives you this for free if every worker launches
->    through the same gateway.
+> 1. **Background agents in the Claude Code TUI — any model per role, one
+>    shared brain.** Support background agents, git worktrees, and feature
+>    branches — an interactive orchestrator that owns the final results and
+>    owns the main branch. The model/provider split is **configurable per
+>    role**, both directions:
+>    - **Default (cheap main):** main orchestrator on GLM 5.2/Fireworks,
+>      workers on the same — `glam launch claude`'s pinned model +
+>      `GLAM_SERVE_TOKEN` reuse gives you this for free if every worker
+>      launches through the same gateway.
+>    - **Frontier main, cheap workers:** main orchestrator on the Anthropic
+>      subscription with a Claude model, background workers on GLM 5.2 on
+>      Fireworks AI (or any other model/provider/harness). The main session
+>      runs `claude` against the Anthropic subscription directly; workers
+>      launch through `glam` on the cheap model.
+>    **Critical constraint:** whichever direction, the background workers'
+>    memory and knowledge base MUST be the same store the main session uses,
+>    and MUST be available across ANY way glam is run in the future (`glam
+>    run`, `glam launch claude`, `glam serve` + any agent, the SDK, etc.) —
+>    one owned brain (`~/.glam/brain.db` + the project brain), not per-mode
+>    silos. No model drift is the default; per-role model choice is the
+>    escape hatch.
 > 2. **First-launch memory capture, fast.** Running `glam launch claude` the
 >    first time on a project that was developed with normal Claude Code must
 >    pull all existing memories into glam's brain store — while keeping the
