@@ -156,6 +156,95 @@ check('glam run --help documents the stable exit-code scheme (issue #23)', () =>
   }
 });
 
+check('glam init scaffolds a starter AGENTS.md and is idempotent (issue #42)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-init-'));
+  try {
+    const init = (args) =>
+      execFileSync('node', [cli, 'init', ...args], { encoding: 'utf8', cwd: dir });
+    const out1 = init([]);
+    if (!/wrote · AGENTS\.md/.test(out1)) throw new Error('first init did not report a write');
+    const file = join(dir, 'AGENTS.md');
+    if (!existsSync(file)) throw new Error('AGENTS.md was not written');
+    const body = readFileSync(file, 'utf8');
+    if (!body.startsWith('# AGENTS.md')) throw new Error('starter missing AGENTS.md header');
+    if (!body.includes('## How to work here'))
+      throw new Error('starter missing the work-here section');
+    // Re-running without --force leaves the file untouched (exit 0, no clobber).
+    const out2 = init([]);
+    if (!/exists · AGENTS\.md already present/.test(out2))
+      throw new Error('idempotent re-run did not report "exists"');
+    // --force backs up the old file then overwrites.
+    writeFileSync(file, 'MY EDITS\n', 'utf8');
+    const out3 = init(['--force']);
+    if (!/backed up existing file/.test(out3)) throw new Error('--force did not back up');
+    if (!existsSync(`${file}.bak`)) throw new Error('AGENTS.md.bak backup missing');
+    if (readFileSync(`${file}.bak`, 'utf8') !== 'MY EDITS\n')
+      throw new Error('backup lost the prior contents');
+    if (readFileSync(file, 'utf8') === 'MY EDITS\n') throw new Error('--force did not overwrite');
+    // Bad flag → exit 2.
+    try {
+      init(['--bogus']);
+      throw new Error('expected non-zero exit for bad flag');
+    } catch (err) {
+      if (err.status !== 2) throw new Error(`expected exit 2, got ${err.status}`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+check('glam run loads AGENTS.md (then CLAUDE.md) into the run context (issue #42)', () => {
+  // The instructions line is printed on every run, honestly, with no provider
+  // call needed to reach it: a bogus key + a tiny budget lets the run start,
+  // print the instructions line, and fail at the provider call — which is all
+  // we need to assert the file was discovered and framed.
+  const dir = mkdtempSync(join(tmpdir(), 'glam-smoke-instructions-'));
+  try {
+    writeFileSync(
+      join(dir, 'glam.toml'),
+      '[providers.fireworks]\n' +
+        'baseUrl = "https://api.fireworks.ai/inference/v1"\n' +
+        'credential = { env = "FIREWORKS_API_KEY" }\n' +
+        'models = ["accounts/fireworks/models/glm-5p2"]\n',
+      'utf8',
+    );
+    // The run prints the instructions line BEFORE the provider call, then exits
+    // non-zero (engine error) because the key is bogus — so read stdout off the
+    // thrown error. The instructions line is what we assert; the error is expected.
+    const runIn = (extraEnv) => {
+      try {
+        return execFileSync('node', [cli, 'run', 'hi', '--max-usd', '0.01', '--max-steps', '1'], {
+          encoding: 'utf8',
+          cwd: dir,
+          env: { ...process.env, FIREWORKS_API_KEY: 'bogus', ...extraEnv },
+          timeout: 60_000,
+        });
+      } catch (err) {
+        // Non-zero exit is expected (bogus key → engine error after the line
+        // prints). The instructions line is in stdout either way.
+        return err.stdout ?? '';
+      }
+    };
+    // AGENTS.md is preferred when present.
+    writeFileSync(join(dir, 'AGENTS.md'), '# AGENTS.md\nproject contract\n', 'utf8');
+    writeFileSync(join(dir, 'CLAUDE.md'), '# CLAUDE.md\nlegacy contract\n', 'utf8');
+    let out = runIn();
+    if (!/instructions: AGENTS\.md ·/.test(out))
+      throw new Error('AGENTS.md not loaded when both files present');
+    // Falls back to CLAUDE.md when AGENTS.md is absent.
+    rmSync(join(dir, 'AGENTS.md'));
+    out = runIn();
+    if (!/instructions: CLAUDE\.md ·/.test(out)) throw new Error('CLAUDE.md fallback not used');
+    // Absent is an honest, normal state.
+    rmSync(join(dir, 'CLAUDE.md'));
+    out = runIn();
+    if (!/instructions: none \(no AGENTS\.md \/ CLAUDE\.md found\)/.test(out))
+      throw new Error('absent instructions not reported honestly');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 check('glam run without a prompt exits 2', () => {
   try {
     run('run');
@@ -1026,7 +1115,34 @@ function startServe({ home, cwd, env, args = [] }) {
       if (m && !done) {
         done = true;
         clearTimeout(timer);
-        resolvePromise({ child, url: m[1], output: () => out });
+        // stop(): kill the server AND await its exit before resolving. On Windows
+        // a bare kill('SIGKILL') returns before the OS releases the child's file
+        // handles (sqlite WAL, temp files), so an immediate rmSync on the serve
+        // cwd hits EBUSY. Awaiting 'exit' (with a hard timeout) closes the race.
+        const stop = () =>
+          new Promise((res) => {
+            if (child.exitCode !== null || child.signalCode) return res();
+            const exitTimer = setTimeout(() => {
+              child.removeAllListeners('exit');
+              try {
+                child.kill('SIGKILL');
+              } catch {
+                /* already gone */
+              }
+              res();
+            }, 5000);
+            child.once('exit', () => {
+              clearTimeout(exitTimer);
+              res();
+            });
+            try {
+              child.kill('SIGKILL');
+            } catch {
+              clearTimeout(exitTimer);
+              res();
+            }
+          });
+        resolvePromise({ child, url: m[1], output: () => out, stop });
       }
     });
     child.stderr.on('data', (chunk) => {
@@ -1120,7 +1236,7 @@ await checkAsync(
         throw new Error('budget stop must state no provider call happened');
       }
     } finally {
-      started.child.kill('SIGKILL');
+      await started.stop();
       rmSync(dir, { recursive: true, force: true });
     }
   },
@@ -1215,7 +1331,7 @@ if (process.env.FIREWORKS_API_KEY) {
           throw new Error('live request metered without real usage');
         }
       } finally {
-        started.child.kill('SIGKILL');
+        await started.stop();
         rmSync(dir, { recursive: true, force: true });
       }
     },

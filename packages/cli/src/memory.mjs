@@ -84,9 +84,16 @@ export function packRecall(hits, { tokenBudget }) {
   return { block: `${RECALL_PREAMBLE}\n\n${entries.join('\n\n')}`, packed, usedTokens };
 }
 
-/** Compose the engine system prompt with the recall block (when non-empty). */
-export function composeSystem(baseSystem, recallBlock) {
-  return recallBlock ? `${baseSystem}\n\n${recallBlock}` : baseSystem;
+/**
+ * Compose the engine system prompt with one or more context blocks (project
+ * instructions, the brain's recall block, …). Empty/blank blocks are dropped so
+ * the base prompt stays clean when nothing was loaded. Blocks are joined in
+ * order after the base system text.
+ */
+export function composeSystem(baseSystem, blocks) {
+  const list = Array.isArray(blocks) ? blocks : [blocks];
+  const joined = list.map((b) => (typeof b === 'string' ? b.trim() : '')).filter((b) => b !== '');
+  return joined.length > 0 ? `${baseSystem}\n\n${joined.join('\n\n')}` : baseSystem;
 }
 
 const ANSWER_MAX_CHARS = 1600;

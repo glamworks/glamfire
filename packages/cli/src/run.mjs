@@ -16,6 +16,7 @@ import {
 } from '@glamfire/adapters';
 import { ConfigError, loadConfig } from '@glamfire/config';
 import { DEFAULT_SYSTEM, builtinTools, defaultPolicy, runTask } from '@glamfire/engine';
+import { formatInstructionsBlock, loadProjectInstructions } from '@glamfire/engine';
 import { PolicyError, explainDecision } from '@glamfire/router';
 import {
   appendRecord,
@@ -365,7 +366,15 @@ export async function cmdRun(argv, { version }) {
       mem.brain = null;
     }
   }
-  const system = composeSystem(DEFAULT_SYSTEM, mem.block);
+  // --- project instructions in the loop (issue #42, SPEC §5.2) ----------------
+  // Read the project's standing instructions — AGENTS.md, falling back to
+  // CLAUDE.md — from the cwd upward into the run context, so every model starts
+  // from the project's own ground truth. Read-only; never modified. Absent is a
+  // fine, honest state (no instructions block is composed in).
+  const instructions = loadProjectInstructions(process.cwd());
+  const instructionsBlock = instructions ? formatInstructionsBlock(instructions) : '';
+
+  const system = composeSystem(DEFAULT_SYSTEM, [instructionsBlock, mem.block]);
 
   let adapter;
   let runtimeConfig;
@@ -457,6 +466,16 @@ export async function cmdRun(argv, { version }) {
       `  effort: ${config.reasoningEffort}   tier: ${config.serviceTier}   ` +
         `budget: ${fmtUSD(budget.maxUSD)} / ${budget.maxSteps} steps\n`,
     );
+  }
+  // Project instructions are visible on every run (SPEC §9 honesty): which
+  // convention file was loaded and from where — or that none was found. Absent
+  // instructions are a normal, honest state, never an error.
+  if (instructions) {
+    const rel = relative(process.cwd(), instructions.path);
+    const where = rel.startsWith('..') ? instructions.path : rel;
+    out.write(`  instructions: ${instructions.file} · ${where}\n`);
+  } else {
+    out.write(color(useColorOut, DIM, '  instructions: none (no AGENTS.md / CLAUDE.md found)\n'));
   }
   // Memory is visible on every run (SPEC §9 honesty): what was recalled, from
   // where — or exactly why memory is off. Zero recalls from an empty store is a

@@ -31,3 +31,10 @@ export {
   gate,
 } from './permissions.js';
 export { type RunOptions, DEFAULT_SYSTEM, runTask } from './loop.js';
+export {
+  type InstructionFile,
+  type ProjectInstructions,
+  INSTRUCTION_FILES,
+  formatInstructionsBlock,
+  loadProjectInstructions,
+} from './instructions.js';
