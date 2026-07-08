@@ -28,6 +28,7 @@ import {
 import { brainStorePath, buildEpisode, composeSystem, openBrain, packRecall } from './memory.mjs';
 import { buildModelRegistry, buildRouter, isLocalModel } from './router.mjs';
 import { CODES, color, useColor } from './ui.mjs';
+import { getHistoricalSignalContext, appendRoutingHistory } from './ledger.mjs';
 
 const { DIM, BOLD, FLAME, YELLOW } = CODES;
 
@@ -414,6 +415,17 @@ export async function cmdRun(argv, { version }) {
   let decision;
   if (opts.model === undefined) {
     try {
+      const registry = buildModelRegistry(glamConfig, process.env);
+      // 🔹 ADDED: Pull historical similarity match matrices completely offline
+      const historyContext = await getHistoricalSignalContext(task);
+      const routerSignals = historyContext ? { history: historyContext } : undefined;
+      // Update buildRouter to accept hooks and signals (we'll ensure router.mjs forwards these)
+      router = buildRouter(glamConfig, registry, {
+        signals: routerSignals,
+        onTaskComplete: async (record) => {
+          await appendRoutingHistory(record);
+        }
+      });
       // Under local_only routing, hosted candidates are structurally ineligible
       // (the policy fails LOUD rather than fall back to a hosted model), so no
       // hosted key is required to build the registry: the dry-run placeholder

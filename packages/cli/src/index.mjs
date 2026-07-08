@@ -21,6 +21,9 @@ for (const s of [process.stdout, process.stderr]) {
 
 const VERSION = getVersion();
 const BANNER = `glamfire ${VERSION}  ·  the open harness for the last mile of AI`;
+
+// 🔹 ADDED: 'report' to the valid commands list
+const COMMANDS = ['run', 'route', 'usage', 'models', 'config', 'doctor', 'version', 'help', 'report'];
 const COMMANDS = [
   'run',
   'route',
@@ -56,6 +59,7 @@ Commands:
   brain              Your knowledge as flat markdown (add/list/query/sync/lint/rebuild);
                      SQLite is just a rebuildable index — grep it, git it, own it
   config             Show the resolved, layered, secret-redacted configuration
+  report             Show task-distribution metrics & longitudinal realized savings (offline)
   version            Print the glamfire version
   doctor             Check the local environment is ready to run glamfire
   help               Show this help
@@ -122,6 +126,11 @@ async function main(argv) {
   if (first === 'usage') {
     const { cmdUsage } = await import('./usage.mjs');
     return cmdUsage(args.slice(1), { version: VERSION });
+  }
+  // 🔹 ADDED: Lazy routing for the report sub-command
+  if (first === 'report') {
+    const { cmdReport } = await import('./report.mjs');
+    return cmdReport(args.slice(1), { version: VERSION });
   }
   if (first === 'models') {
     const { cmdModels } = await import('./models.mjs');

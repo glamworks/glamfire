@@ -11,6 +11,7 @@ import { ConfigError, loadConfig } from '@glamfire/config';
 import { PolicyError, explainDecision, formatReport } from '@glamfire/router';
 import { buildModelRegistry, buildRouter } from './router.mjs';
 import { CODES, color, useColor } from './ui.mjs';
+import { getHistoricalSignalContext } from './ledger.mjs';
 
 const { DIM, FLAME } = CODES;
 
@@ -131,9 +132,17 @@ export async function cmdRoute(argv, { version }) {
   let decision;
   try {
     registry = buildModelRegistry(loaded.config, process.env, { allowDryRunKey: true });
+    // 🔹 ADDED: Seed historical similarities for accurate feature evaluation
+    const historyContext = await getHistoricalSignalContext(task);
     const routerOpts = {};
     if (opts.outputTokens !== undefined && Number.isFinite(opts.outputTokens)) {
       routerOpts.outputTokens = opts.outputTokens;
+    }
+    // 🔹 ADDED: Pass the tracking history signal down to the classifier
+    if (historyContext) {
+      routerOpts.signals = {
+        history: historyContext,
+      };
     }
     if (opts.local) routerOpts.localOnly = true;
     router = buildRouter(loaded.config, registry, routerOpts);
